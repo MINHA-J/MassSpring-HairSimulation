@@ -95,7 +95,7 @@ namespace pilar
 
 		head = new Sphere;
 		head->pos = Vector3f(0.0f, 50.f, 60.f);
-		head->radius = 80.f;
+		head->radius = 75.f;
 		h_state->Head = head;
 
 		d_state = 0;
@@ -439,7 +439,7 @@ bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
 		}
 
 		UWorld* world = GetWorld();
-		DrawDebugSphere(world, FVector(0, 50, 60), 85, 26, FColor::Blue, true, -1, 0, 1);
+		DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
 		UE_LOG(LogType, Error, TEXT("Show Hair: %d"), hair.size());
 		for (int32 i = 0; i < hair.size() - 1; ++i)
 		{
@@ -483,7 +483,7 @@ void UMyHairSim::InitHairModel()
 			hair[i].spawn_pt.x(),
 			hair[i].spawn_pt.z(),
 			hair[i].spawn_pt.y());
-		normals[i] = pilar::Vector3f(1.0f, 0.5f, 0.0f);
+		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Y, m_normal.Z);
 	}
 
 	//Gravity
@@ -578,7 +578,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 		//SimpleHair->update(DeltaTime);
 		//SimpleHair->draw();
 
-		pilar::Vector3f* pos = hairs->get_state->position;
+		pilar::Vector3f* pos = hairs->get_state->pos;
 		hairs->update(abs(DeltaTime) / 10.0f, pos);
 
 		for (int32 h = 0; h < hairs->h_state->numStrands; h++)
@@ -587,17 +587,17 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 			for (int32 par = 0; par < hairs->h_state->numParticles; par++)
 			{
 				FVector vec1(
-					hairs->get_state->pos[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->pos[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->pos[h * hairs->h_state->numParticles + par].y);
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
 				DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.2f);
 
 				if (par + 1 < hairs->h_state->numParticles)
 				{
 					FVector vec2(
-						hairs->get_state->pos[h * hairs->h_state->numParticles + par + 1].x,
-						hairs->get_state->pos[h * hairs->h_state->numParticles + par + 1].z,
-						hairs->get_state->pos[h * hairs->h_state->numParticles + par + 1].y);
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].x,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].z,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y);
 
 					DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
 				}

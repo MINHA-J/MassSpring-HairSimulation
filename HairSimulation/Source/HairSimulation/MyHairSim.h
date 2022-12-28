@@ -240,6 +240,8 @@ public:
 		void DoOnceSimulation();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hair")
 		bool bStartSimulate;
+	UPROPERTY(EditAnywhere, CallInEditor, Category = "Hair")
+		FVector m_normal = FVector(1.0f, 0.5f, 0.0f);
 
 	//void OnRegister() override;
 	uint32 IsInitMesh = 0;

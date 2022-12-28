@@ -964,6 +964,7 @@ void updatePositions(float dt, pilar::HairState* state)
 {
 	//State pointers
 	pilar::Vector3f* position = state->position;
+	pilar::Vector3f* save_pos = state->save_pos;
 	pilar::Vector3f* posh = state->posh;
 	pilar::Vector3f* pos = state->pos;
 	pilar::Vector3f* velh = state->velh;
@@ -976,6 +977,7 @@ void updatePositions(float dt, pilar::HairState* state)
 	{
 		//Save old position
 		pilar::Vector3f poso = position[i];
+		save_pos[i] = poso;
 
 		//Calculate new position
 		position[i] = poso + (velh[i] * dt);
@@ -1059,25 +1061,23 @@ void applyStrainLimiting(float dt, pilar::HairState* state)
 
 //-- My Code
 __device__
-bool quadratic_solve(float a, float b, float c, float* t0_, float* t1_)
+float quadratic_solve(float a, float b, float c)
 {
-	t0_[0] = 0.0;
-	t1_[0] = 0.0;
 
 	const float discriminant = b * b - 4.0 * a * c;
-	if (discriminant <= 0.0) 
+	if (discriminant < 0.0)
 	{
-		return false;
+		return;
 	}
 
 	float root_discriminant = sqrt(discriminant);
 
 	float q;
-	if (b < 0.0) 
+	if (b < 0.0)
 	{
 		q = -0.5 * (b - root_discriminant);
 	}
-	else 
+	else
 	{
 		q = -0.5 * (b + root_discriminant);
 	}
@@ -1085,18 +1085,18 @@ bool quadratic_solve(float a, float b, float c, float* t0_, float* t1_)
 	float t0 = q / a;
 	float t1 = c / q;
 
+	float t0_, t1_;
 	if (t0 < t1)
 	{
-		t0_[0] = t0;
-		t1_[0] = t1;
+		t0_ = t0;
+		t1_ = t1;
 	}
 	else
 	{
-		t0_[0] = t1;
-		t1_[0] = t0;
+		t0_ = t1;
+		t1_ = t0;
 	}
-
-	return true;
+	return t0_;
 }
 __host__ __device__
 float dot(const pilar::Vector3f &a, const pilar::Vector3f &b)
@@ -1110,9 +1110,8 @@ void intersect(pilar::HairState* state)
 	//State pointers
 	pilar::Sphere* s = state->Head;
 	pilar::Vector3f* position = state->position;
-	pilar::Vector3f* pos = state->pos;
+	pilar::Vector3f* pos = state->save_pos;
 
-	int sid = blockIdx.x;
 	int startP = blockIdx.x * state->numParticles;
 	int endP = startP + state->numParticles;
 
@@ -1122,28 +1121,30 @@ void intersect(pilar::HairState* state)
 		pilar::Vector3f o = pos[i] - s->pos;
 		pilar::Vector3f d = position[i] - pos[i];
 
+
 		//Build spehre coefficients
 		float a = dot(d, d);
 		float b = 2.0 * dot(d, o);
-		float c = dot(o,o) - s->radius * s->radius;
+		float c = dot(o, o) - s->radius * s->radius;
 
-		float *t0, *t1;
-		if (quadratic_solve(a, b, c, t0, t1) && t0[0] > 0.0 && t0[0] <= 1.0)
+		float t0 = quadratic_solve(a, b, c);
+
+		if (t0 > 0.0 && t0 <= 1.0)
 		{
-			pilar::Vector3f intersection = o + d * t0[0];
+			pilar::Vector3f intersection = o + d * t0;
 			intersection.unitize();
 			pilar::Vector3f n = intersection;
 
 			// The d of the plane is -radius
-			pilar::Vector3f newpos = pos[i] - n * (1.0f + 0.5f) * (dot(n, pos[i] - s->pos) - s->radius);
+			//pilar::Vector3f newpos = pos[i] - n * (10.f) * (dot(n, pos[i] - s->pos) - s->radius);
+			position[i] = pos[i] - n * (1.0f + 0.5f) * (dot(n, pos[i] - s->pos) - s->radius);
 			pilar::Vector3f d_proj = n * dot(n, d);
 			pilar::Vector3f v_bounce = d - d_proj * (1.0f + 0.5f);
-			pilar::Vector3f v_friction = v_bounce - (d - d_proj)*(0.02f);
-			//pos[i] = position[i] - v_friction;
-			position[i] = newpos - v_friction;
+			pilar::Vector3f v_friction = v_bounce - (d - d_proj)*(1.f);
+			state->pos[i] = position[i] - v_friction;
+			//position[i] = newpos - v_friction;
 		}
 	}
-
 }
 
 
@@ -1165,6 +1166,10 @@ void update(float dt, pilar::HairState* state)
 	//Calculate half velocities using forces
 	updateVelocities(dt, state);
 
+	//++Sphere(Head) Intersection
+	//updatePositions(dt, state);
+	//intersect(state);
+
 	applyStrainLimiting(dt, state);
 
 	//Calculate half position and new position
@@ -1178,9 +1183,6 @@ void update(float dt, pilar::HairState* state)
 
 	//Apply gravity
 	applyForce(mgravity, state);
-
-	//Sphere(Head) Intersection
-	intersect(state);
 
 	//Calculate half velocity and new velocity
 	updateParticles(dt, state);
@@ -1224,6 +1226,7 @@ void mallocStrands(pilar::HairState* h_state, pilar::HairState* &d_state)
 	h_state->root = (pilar::Vector3f*) mallocBytes(h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->normal = (pilar::Vector3f*) mallocBytes(h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->position = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
+	h_state->save_pos = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->pos = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->posc = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->posh = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
@@ -1246,6 +1249,7 @@ void freeStrands(pilar::HairState* h_state, pilar::HairState* d_state)
 	checkCudaErrors(cudaFree(h_state->root));
 	checkCudaErrors(cudaFree(h_state->normal));
 	checkCudaErrors(cudaFree(h_state->position));
+	checkCudaErrors(cudaFree(h_state->save_pos));
 	checkCudaErrors(cudaFree(h_state->pos));
 	checkCudaErrors(cudaFree(h_state->posc));
 	checkCudaErrors(cudaFree(h_state->posh));

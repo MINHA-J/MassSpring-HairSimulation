@@ -40,6 +40,7 @@ namespace pilar
 		Vector3f* root;
 		Vector3f* normal;
 		Vector3f* position;	
+		Vector3f* save_pos;
 		Vector3f* pos;		//previous position
 		Vector3f* posc;		//candidate position
 		Vector3f* posh;		//half position
