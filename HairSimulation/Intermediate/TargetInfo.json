@@ -1,0 +1,14 @@
+{
+	"Targets": [
+		{
+			"Name": "HairSimulation",
+			"Path": "C:\\Users\\user\\Documents\\Unreal Projects\\HairSimulation\\Source\\HairSimulation.Target.cs",
+			"Type": "Game"
+		},
+		{
+			"Name": "HairSimulationEditor",
+			"Path": "C:\\Users\\user\\Documents\\Unreal Projects\\HairSimulation\\Source\\HairSimulationEditor.Target.cs",
+			"Type": "Editor"
+		}
+	]
+}
