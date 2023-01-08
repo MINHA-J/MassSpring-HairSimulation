@@ -149,6 +149,7 @@ namespace pilar
 	void CUHair::update(float dt, Vector3f* position)
 	{
 		//h_state->position = position;
+		checkCudaErrors(cudaMemcpy(h_state->root, get_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->position, position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 
 		updateStrands(dt, h_state, d_state);
@@ -439,7 +440,7 @@ bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
 		}
 
 		UWorld* world = GetWorld();
-		DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
+		//DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
 		UE_LOG(LogType, Error, TEXT("Show Hair: %d"), hair.size());
 		for (int32 i = 0; i < hair.size() - 1; ++i)
 		{
@@ -500,39 +501,23 @@ void UMyHairSim::InitHairModel()
 		roots,
 		normals);
 
+	pilar::Vector3f* root = new pilar::Vector3f[NUMSTRANDS];
+	hairs->get_state->root = root;
 	pilar::Vector3f* position = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->position = position;
-
 	pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->pos = pos;
-
 	pilar::Vector3f* velo = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->velocity = velo;
 
 	//Initialise positions along normals on the gpu
 	hairs->initialise(position);
-
-	for (int32 h = 0; h < hairs->h_state->numStrands; h++)
-	{
-		for (int32 par = 0; par < hairs->h_state->numParticles; par++)
-		{
-			FVector vec1(
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].y,
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].z);
-		}
-	}
-
-	IsInitMesh++;
 }
 
 void UMyHairSim::DoOnceSimulation()
 {
-	if (IsInitMesh == 0)
-	{
-		InitHairModel();
-	}
-
+	InitHairModel();
+	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
 	//SimpleHair->set_transform(head_xform);
 	//SimpleHair->update(DeltaTime);
 	//SimpleHair->draw();
@@ -569,23 +554,49 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (bStartSimulate)
 	{
-		if (IsInitMesh == 0)
+		m_before = pilar::Vector3f(GetComponentToWorld().GetLocation().X, GetComponentToWorld().GetLocation().Y, GetComponentToWorld().GetLocation().Z);
+
+		if (bIsInitMesh)
 		{
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
 			InitHairModel();
+			bIsInitMesh = false;
 		}
 
-		//SimpleHair->set_transform(head_xform);
-		//SimpleHair->update(DeltaTime);
-		//SimpleHair->draw();
+		//checkCudaErrors(cudaMemcpy(hairs->h_state, hairs->d_state, sizeof(hairs->d_state), cudaMemcpyDeviceToHost));
+		//checkCudaErrors(cudaMemcpy(hairs->get_state->root, hairs->h_state->root, hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
+		//checkCudaErrors(cudaMemcpy(hairs->get_state->position, hairs->h_state->position, hairs->h_state->numParticles * hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
 		pilar::Vector3f* pos = hairs->get_state->pos;
 		hairs->update(abs(DeltaTime) / 10.0f, pos);
 
+		m_move = m_before - m_after;
+
 		for (int32 h = 0; h < hairs->h_state->numStrands; h++)
 		{
 			UWorld* world = GetWorld();
+			hairs->get_state->root[h].x += m_move.x;
+			hairs->get_state->root[h].y += m_move.z;
+			hairs->get_state->root[h].z += m_move.y;
+
+			FVector root(hairs->get_state->root[h].x, hairs->get_state->root[h].z, hairs->get_state->root[h].y);
+			FVector first(
+				hairs->get_state->position[h * hairs->h_state->numParticles].x + m_move.x,
+				hairs->get_state->position[h * hairs->h_state->numParticles].z + m_move.z,
+				hairs->get_state->position[h * hairs->h_state->numParticles].y + m_move.y);
+			DrawDebugLine(world, root, first, FColor::Emerald, false, -1, 0, 0.8f);
+
 			for (int32 par = 0; par < hairs->h_state->numParticles; par++)
 			{
+				hairs->get_state->position[h * hairs->h_state->numParticles + par].x += m_move.x;
+				hairs->get_state->position[h * hairs->h_state->numParticles + par].y += m_move.z;
+				hairs->get_state->position[h * hairs->h_state->numParticles + par].z += m_move.y;
+				//hairs->get_state->position[h * hairs->h_state->numParticles + par].x += GetComponentLocation().X;
+				//hairs->get_state->position[h * hairs->h_state->numParticles + par].y += GetComponentLocation().Z;
+				//hairs->get_state->position[h * hairs->h_state->numParticles + par].z += GetComponentLocation().Y;
+				//UE_LOG(LogType, Log, TEXT("Com Loc - x:%f, y:%f, z:%f"), GetComponentLocation().X, GetComponentLocation().Y , GetComponentLocation().Z);
+				UE_LOG(LogType, Log, TEXT("Com Loc - x:%f, y:%f, z:%f"), m_move.x, m_move.y, m_move.z);
+
 				FVector vec1(
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
@@ -595,14 +606,19 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				if (par + 1 < hairs->h_state->numParticles)
 				{
 					FVector vec2(
-						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].x,
-						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].z,
-						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y);
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].x + m_move.x,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].z + m_move.y,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y + m_move.z);
+					/*FVector vec2(
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].x + GetComponentLocation().X,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].z + GetComponentLocation().Y,
+						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y + GetComponentLocation().Z);*/
 
 					DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
 				}
 			}
 			UE_LOG(LogType, Error, TEXT("Update %f time, Hair %d"), abs(DeltaTime) / 10.0f, h);
+			m_after = pilar::Vector3f(GetComponentToWorld().GetLocation().X, GetComponentToWorld().GetLocation().Y, GetComponentToWorld().GetLocation().Z);
 		}
 	}
 }

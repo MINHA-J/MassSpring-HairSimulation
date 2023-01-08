@@ -19,7 +19,7 @@
 #define D_BEND				12500.0f // ~ 250.0f
 #define D_TWIST				12500.0f // ~ 250.0f
 #define D_EXTRA				625.0f // ~ 12.5f
-#define GRAVITY				-981.f //(stable value) -0.00981f
+#define GRAVITY				-600.f //(stable value) -0.00981f
 
 //Stiction constants
 #define K_STIC				0.01f //Stiction spring coefficient

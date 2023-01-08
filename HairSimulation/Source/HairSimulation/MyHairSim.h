@@ -240,15 +240,18 @@ public:
 		void DoOnceSimulation();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hair")
 		bool bStartSimulate;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hair")
+		bool bIsInitMesh = true;
 	UPROPERTY(EditAnywhere, CallInEditor, Category = "Hair")
 		FVector m_normal = FVector(1.0f, 0.5f, 0.0f);
-
+	
 	//void OnRegister() override;
-	uint32 IsInitMesh = 0;
 	vector<Mesh*> m_meshes;
 	Mesh* mesh_head;
 	vector<HairStrand> hair;
-	Vector3f dbg_force;
+	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_after = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_move = pilar::Vector3f(0.0f, 0.0f, 0.0f);
 	pilar::CUHair* hairs;
 	float prevTime = 0.0f;
 
