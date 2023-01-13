@@ -20,11 +20,11 @@ Mesh::Mesh()
 	//mtl->diffuse = Vector3f(1, 1, 1);
 	//mtl->shininess = 50;
 }
-// Mesh's Info
-//vector<Mesh*> load_meshes(const char* fname)
-//{
-	// BuildProceduralMeshComponent 쪽에 구현해놓음
-//}
+
+Mesh::~Mesh()
+{
+	delete bbox;
+}
 
 void Mesh::calc_bbox()
 {
@@ -52,9 +52,299 @@ void Mesh::calc_bbox()
 
 namespace pilar
 {
+	void initDistanceField(ModelOBJ *obj, float* grid)
+	{
+		float result[DOMAIN_DIM][DOMAIN_DIM][DOMAIN_DIM];
+
+		//Initialise distance field to inifinity
+		for (int xx = 0; xx < DOMAIN_DIM; xx++)
+			for (int yy = 0; yy < DOMAIN_DIM; yy++)
+				for (int zz = 0; zz < DOMAIN_DIM; zz++)
+					result[xx][yy][zz] = FLT_MAX;
+
+		//calculate triangle normal scaling factor
+		float delta = 2.5f;
+		float echo = CELL_WIDTH * delta;
+
+		int numVertices = obj->totalConnectedPoints / POINTS_PER_VERTEX;
+		int numTriangles = obj->totalConnectedTriangles / TOTAL_FLOATS_IN_TRIANGLE;
+
+		//read in each triangle with its normal data
+		for (int i = 0; i < numTriangles; i++)
+		{
+			float triangle[3][POINTS_PER_VERTEX];
+
+
+			for (int j = 0; j < POINTS_PER_VERTEX; j++)
+			{
+				triangle[j][0] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3];
+				triangle[j][1] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 1];
+				triangle[j][2] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 2];
+			}
+
+			float normal[POINTS_PER_VERTEX];
+			normal[0] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE];
+			normal[1] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE + 1];
+			normal[2] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE + 2];
+
+			//build prism
+			float prism[6][POINTS_PER_VERTEX];
+			for (int j = 0; j < POINTS_PER_VERTEX; j++)
+			{
+				prism[j][0] = triangle[j][0] + echo * normal[0];
+				prism[j][1] = triangle[j][1] + echo * normal[1];
+				prism[j][2] = triangle[j][2] + echo * normal[2];
+				prism[j + 3][0] = triangle[j][0] - echo * normal[0];
+				prism[j + 3][1] = triangle[j][1] - echo * normal[1];
+				prism[j + 3][2] = triangle[j][2] - echo * normal[2];
+			}
+
+			//Axis-aligned bounding box
+			float aabb[2][POINTS_PER_VERTEX]; //-x,-y,-z,+x,+y,+z
+			aabb[0][0] = FLT_MAX;
+			aabb[0][1] = FLT_MAX;
+			aabb[0][2] = FLT_MAX;
+			aabb[1][0] = -FLT_MAX;
+			aabb[1][1] = -FLT_MAX;
+			aabb[1][2] = -FLT_MAX;
+
+			//Build the aabb using the minimum and maximum values of the prism
+			for (int j = 0; j < 6; j++)
+			{
+				//minimum x, y, z
+				aabb[0][0] = std::min(prism[j][0], aabb[0][0]);
+				aabb[0][1] = std::min(prism[j][1], aabb[0][1]);
+				aabb[0][2] = std::min(prism[j][2], aabb[0][2]);
+
+				//maximum x, y, z
+				aabb[1][0] = std::max(prism[j][0], aabb[1][0]);
+				aabb[1][1] = std::max(prism[j][1], aabb[1][1]);
+				aabb[1][2] = std::max(prism[j][2], aabb[1][2]);
+			}
+
+			//normalise to the grid
+			aabb[0][0] = (aabb[0][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+			aabb[0][2] = (aabb[0][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[1][0] = (aabb[1][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta / 2) - CELL_HALF) / CELL_WIDTH;
+			aabb[1][2] = (aabb[1][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+
+			//round aabb
+			aabb[0][0] = floor(aabb[0][0]);
+			aabb[0][1] = floor(aabb[0][1]);
+			aabb[0][2] = floor(aabb[0][2]);
+			aabb[1][0] = ceil(aabb[1][0]);
+			aabb[1][1] = ceil(aabb[1][1]);
+			aabb[1][2] = ceil(aabb[1][2]);
+
+			int iaabb[2][POINTS_PER_VERTEX];
+			iaabb[0][0] = int(aabb[0][0]);
+			iaabb[0][1] = int(aabb[0][1]);
+			iaabb[0][2] = int(aabb[0][2]);
+			iaabb[1][0] = int(aabb[1][0]);
+			iaabb[1][1] = int(aabb[1][1]);
+			iaabb[1][2] = int(aabb[1][2]);
+
+			//build edge vectors
+			float edge[3][POINTS_PER_VERTEX];
+			edge[0][0] = triangle[1][0] - triangle[0][0];
+			edge[0][1] = triangle[1][1] - triangle[0][1];
+			edge[0][2] = triangle[1][2] - triangle[0][2];
+			edge[1][0] = triangle[2][0] - triangle[1][0];
+			edge[1][1] = triangle[2][1] - triangle[1][1];
+			edge[1][2] = triangle[2][2] - triangle[1][2];
+			edge[2][0] = triangle[0][0] - triangle[2][0];
+			edge[2][1] = triangle[0][1] - triangle[2][0];
+			edge[2][2] = triangle[0][2] - triangle[2][0];
+
+			//build edge normal vectors by cross product with triangle normal
+			float edgeNormal[3][POINTS_PER_VERTEX];
+			edgeNormal[0][0] = normal[1] * edge[0][2] - normal[2] * edge[0][1];
+			edgeNormal[0][1] = normal[2] * edge[0][0] - normal[0] * edge[0][2];
+			edgeNormal[0][2] = normal[0] * edge[0][1] - normal[1] * edge[0][0];
+			edgeNormal[1][0] = normal[1] * edge[1][2] - normal[2] * edge[1][1];
+			edgeNormal[1][1] = normal[2] * edge[1][0] - normal[0] * edge[1][2];
+			edgeNormal[1][2] = normal[0] * edge[1][1] - normal[1] * edge[1][0];
+			edgeNormal[2][0] = normal[1] * edge[2][2] - normal[2] * edge[2][1];
+			edgeNormal[2][1] = normal[2] * edge[2][0] - normal[0] * edge[2][2];
+			edgeNormal[2][2] = normal[0] * edge[2][1] - normal[1] * edge[2][0];
+
+			for (int xx = iaabb[0][0]; xx <= iaabb[1][0]; xx++)
+			{
+				for (int yy = iaabb[0][1]; yy <= iaabb[1][1]; yy++)
+				{
+					for (int zz = iaabb[0][2]; zz <= iaabb[1][2]; zz++)
+					{
+						//Denormalise from grid to centre of cell
+						float xpos = xx * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
+						float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
+						float zpos = zz * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
+
+						//dot product between gridpoint and triangle normal
+						float dvalue = (xpos - triangle[0][0]) * normal[0] + (ypos - triangle[0][1]) * normal[1] + (zpos - triangle[0][2]) * normal[2];
+
+						//Test whether the point lies within the triangle voronoi region
+						float planeTest[3];
+						planeTest[0] = xpos * edgeNormal[0][0] + ypos * edgeNormal[0][1] + zpos * edgeNormal[0][2] - triangle[0][0] * edgeNormal[0][0] - triangle[0][1] * edgeNormal[0][1] - triangle[0][2] * edgeNormal[0][2];
+						planeTest[1] = xpos * edgeNormal[1][0] + ypos * edgeNormal[1][1] + zpos * edgeNormal[1][2] - triangle[1][0] * edgeNormal[1][0] - triangle[1][1] * edgeNormal[1][1] - triangle[1][2] * edgeNormal[1][2];
+						planeTest[2] = xpos * edgeNormal[2][0] + ypos * edgeNormal[2][1] + zpos * edgeNormal[2][2] - triangle[2][0] * edgeNormal[2][0] - triangle[2][1] * edgeNormal[2][1] - triangle[2][2] * edgeNormal[2][2];
+
+						if (!(planeTest[0] < 0.0f && planeTest[1] < 0.0f && planeTest[2] < 0.0f))
+						{
+							//Cross products
+							float regionNormal[3][POINTS_PER_VERTEX];
+							regionNormal[0][0] = normal[1] * edgeNormal[0][2] - normal[2] * edgeNormal[0][1];
+							regionNormal[0][1] = normal[2] * edgeNormal[0][0] - normal[0] * edgeNormal[0][2];
+							regionNormal[0][2] = normal[0] * edgeNormal[0][1] - normal[1] * edgeNormal[0][0];
+							regionNormal[1][0] = normal[1] * edgeNormal[1][2] - normal[2] * edgeNormal[1][1];
+							regionNormal[1][1] = normal[2] * edgeNormal[1][0] - normal[0] * edgeNormal[1][2];
+							regionNormal[1][2] = normal[0] * edgeNormal[1][1] - normal[1] * edgeNormal[1][0];
+							regionNormal[2][0] = normal[1] * edgeNormal[2][2] - normal[2] * edgeNormal[2][1];
+							regionNormal[2][1] = normal[2] * edgeNormal[2][0] - normal[0] * edgeNormal[2][2];
+							regionNormal[2][2] = normal[0] * edgeNormal[2][1] - normal[1] * edgeNormal[2][0];
+
+							float regionTest[3][2];
+							//Test if the point lies between the planes that define the first edge's voronoi region.
+							regionTest[0][0] = -xpos * regionNormal[0][0] - ypos * regionNormal[0][1] - zpos * regionNormal[0][2] + triangle[0][0] * regionNormal[0][0] + triangle[0][1] * regionNormal[0][1] + triangle[0][2] * regionNormal[0][2];
+							regionTest[0][1] = xpos * regionNormal[0][0] + ypos * regionNormal[0][1] + zpos * regionNormal[0][2] - triangle[1][0] * regionNormal[0][0] - triangle[1][1] * regionNormal[0][1] - triangle[1][2] * regionNormal[0][2];
+							//Test if the point lies between the planes that define the second edge's voronoi region.
+							regionTest[1][0] = -xpos * regionNormal[1][0] - ypos * regionNormal[1][1] - zpos * regionNormal[1][2] + triangle[1][0] * regionNormal[1][0] + triangle[1][1] * regionNormal[1][1] + triangle[1][2] * regionNormal[1][2];
+							regionTest[1][1] = xpos * regionNormal[1][0] + ypos * regionNormal[1][1] + zpos * regionNormal[1][2] - triangle[2][0] * regionNormal[1][0] - triangle[2][1] * regionNormal[1][1] - triangle[2][2] * regionNormal[1][2];
+							//Test if the point lies between the planes that define the third edge's voronoi region.
+							regionTest[2][0] = -xpos * regionNormal[2][0] - ypos * regionNormal[2][1] - zpos * regionNormal[2][2] + triangle[2][0] * regionNormal[1][0] + triangle[2][1] * regionNormal[1][1] + triangle[2][2] * regionNormal[1][2];
+							regionTest[2][1] = xpos * regionNormal[2][0] + ypos * regionNormal[2][1] + zpos * regionNormal[2][2] - triangle[0][0] * regionNormal[1][0] - triangle[0][1] * regionNormal[1][1] - triangle[0][2] * regionNormal[1][2];
+
+							if (planeTest[0] >= 0.0f && regionTest[0][0] < 0.0f && regionTest[0][1] < 0.0f)
+							{
+								float aa[POINTS_PER_VERTEX];
+								float bb[POINTS_PER_VERTEX];
+								float cc[POINTS_PER_VERTEX];
+								float dd[POINTS_PER_VERTEX];
+
+								aa[0] = xpos - triangle[0][0];
+								aa[1] = ypos - triangle[0][1];
+								aa[2] = zpos - triangle[0][2];
+								bb[0] = xpos - triangle[1][0];
+								bb[1] = ypos - triangle[1][1];
+								bb[2] = zpos - triangle[1][2];
+								cc[0] = triangle[1][0] - triangle[0][0];
+								cc[1] = triangle[1][1] - triangle[0][1];
+								cc[2] = triangle[1][2] - triangle[0][2];
+
+								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+
+								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+								dvalue = (dvalue >= 0.0f) ? dist : -dist;
+
+							}
+							else if (planeTest[1] >= 0.0f && regionTest[1][0] < 0.0f && regionTest[1][1] < 0.0f)
+							{
+								float aa[POINTS_PER_VERTEX];
+								float bb[POINTS_PER_VERTEX];
+								float cc[POINTS_PER_VERTEX];
+								float dd[POINTS_PER_VERTEX];
+
+								aa[0] = xpos - triangle[1][0];
+								aa[1] = ypos - triangle[1][1];
+								aa[2] = zpos - triangle[1][2];
+								bb[0] = xpos - triangle[2][0];
+								bb[1] = ypos - triangle[2][1];
+								bb[2] = zpos - triangle[2][2];
+								cc[0] = triangle[2][0] - triangle[1][0];
+								cc[1] = triangle[2][1] - triangle[1][1];
+								cc[2] = triangle[2][2] - triangle[1][2];
+
+								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+
+								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+								dvalue = (dvalue >= 0.0f) ? dist : -dist;
+							}
+							else if (planeTest[2] >= 0.0f && regionTest[2][0] < 0.0f && regionTest[2][1] < 0.0f)
+							{
+								float aa[POINTS_PER_VERTEX];
+								float bb[POINTS_PER_VERTEX];
+								float cc[POINTS_PER_VERTEX];
+								float dd[POINTS_PER_VERTEX];
+
+								aa[0] = xpos - triangle[2][0];
+								aa[1] = ypos - triangle[2][1];
+								aa[2] = zpos - triangle[2][2];
+								bb[0] = xpos - triangle[0][0];
+								bb[1] = ypos - triangle[0][1];
+								bb[2] = zpos - triangle[0][2];
+								cc[0] = triangle[0][0] - triangle[2][0];
+								cc[1] = triangle[0][1] - triangle[2][1];
+								cc[2] = triangle[0][2] - triangle[2][2];
+
+								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+
+								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+								dvalue = (dvalue >= 0.0f) ? dist : -dist;
+							}
+							else
+							{
+								float dist[3];
+								dist[0] = sqrtf((xpos - triangle[0][0])*(xpos - triangle[0][0]) + (ypos - triangle[0][1])*(ypos - triangle[0][1]) + (zpos - triangle[0][2])*(zpos - triangle[0][2]));
+								dist[1] = sqrtf((xpos - triangle[1][0])*(xpos - triangle[1][0]) + (ypos - triangle[1][1])*(ypos - triangle[1][1]) + (zpos - triangle[1][2])*(zpos - triangle[1][2]));
+								dist[2] = sqrtf((xpos - triangle[2][0])*(xpos - triangle[2][0]) + (ypos - triangle[2][1])*(ypos - triangle[2][1]) + (zpos - triangle[2][2])*(zpos - triangle[2][2]));
+
+								dvalue = (dvalue >= 0.0f) ? std::min(dist[0], std::min(dist[1], dist[2])) : -std::min(dist[0], std::min(dist[1], dist[2]));
+							}
+						}
+
+						if (result[xx][yy][zz] < FLT_MAX)
+						{
+							if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue > 0.0f && result[xx][yy][zz] < 0.0f)
+							{
+								result[xx][yy][zz] = dvalue;
+							}
+							else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue >= 0.0f && result[xx][yy][zz] > 0.0f)
+							{
+								result[xx][yy][zz] = dvalue;
+							}
+							else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue <= 0.0f && result[xx][yy][zz] < 0.0f)
+							{
+								result[xx][yy][zz] = dvalue;
+							}
+						}
+						else
+						{
+							result[xx][yy][zz] = dvalue;
+						}
+					}
+				}
+			}
+		}
+
+		// Save Result
+		for (int i = 0; i < DOMAIN_DIM -1; i++)
+			for (int j = 0; j < DOMAIN_DIM-1; j++)
+				for (int k = 0; k < DOMAIN_DIM-1; k++)
+				{
+					int indexgrid = (DOMAIN_DIM*DOMAIN_DIM*i) + (DOMAIN_DIM * j) + k;
+					if (indexgrid < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM)
+					{
+						grid[indexgrid] = result[i][j][k];
+						//if (result[i][j][k] < FLT_MAX)
+						//	UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
+					}
+				}
+	}
+
 	CUHair::CUHair(int numStrands,
 		int numParticles,
 		int numComponents,
+		int numModel,
 		float mass,
 		float k_edge,
 		float k_bend,
@@ -69,9 +359,9 @@ namespace pilar
 		float length_t,
 		Vector3f gravity,
 		Vector3f* roots,
-		Vector3f* normals
-		//ModelOBJ* model
-	)
+		Vector3f* normals,
+		ModelOBJ* model,
+		float* grid)
 	{
 		h_state = new HairState;
 		h_state->root = roots;
@@ -92,6 +382,11 @@ namespace pilar
 		h_state->length_e = length_e;
 		h_state->length_b = length_b;
 		h_state->length_t = length_t;
+		h_state->model = model;
+		h_state->numModel = numModel;
+		h_state->grid = grid;
+
+		initDistanceField(h_state->model, h_state->grid);
 
 		head = new Sphere;
 		head->pos = Vector3f(0.0f, 50.f, 60.f);
@@ -101,6 +396,7 @@ namespace pilar
 		d_state = 0;
 
 		//Get_state = h_state;
+
 		//Allocate memory on GPU          
 		mallocStrands(h_state, d_state);
 		//checkCudaErrors(cudaMalloc((void**)&d_state, sizeof(pilar::HairState)));
@@ -121,6 +417,7 @@ namespace pilar
 		freeStrands(h_state, d_state);
 
 		delete h_state;
+		delete get_state;
 	}
 
 	void CUHair::initialise(Vector3f* position)
@@ -142,7 +439,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->root, h_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->velh, h_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
 	}
 
@@ -150,7 +447,9 @@ namespace pilar
 	{
 		//h_state->position = position;
 		checkCudaErrors(cudaMemcpy(h_state->root, get_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(h_state->pos, get_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->position, position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(h_state->velh, get_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 
 		updateStrands(dt, h_state, d_state);
 
@@ -158,7 +457,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->root, h_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->velh, h_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
 	}
 }
@@ -177,11 +476,18 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 
 	bShowStaticMesh = true;
 	hair_length = 1.f;
+
+	m_objects.clear();
+	mesh_head = nullptr;
+	//m_model = nullptr;
+
+	root_hair.clear();
+	hairs = nullptr;
 }
 
 void UMyHairSim::load_meshes()
 {
-	m_meshes.clear();
+	m_objects.clear();
 	Mesh* mesh = new Mesh();
 
 	UStaticMesh* usm = m_StaticMesh->GetStaticMesh();
@@ -280,47 +586,7 @@ void UMyHairSim::load_meshes()
 	// Build Tri Array and Per Vert Shared Tri Array
 	// BuildTriArrays();
 
-	/*
-	// -- LoadOBJ(const char* filename, ModelOBJ* obj)
-	model->totalConnectedPoints = 0;
-	model->totalConnectedTriangles = 0;
-	model->vertices = new float[smData.vert_count];
-	model->normals = new float[smData.vert_count*4];
-	model->faces = new float[smData.vert_count * 4];
-	model->bytes = smData.vert_count * 4;
-	int triangleIndex = 0;
-	int normalIndex = 0;
-
-	int POINTS_PER_VERTEX = 3;
-	int TOTAL_FLOATS_IN_TRIANGLE = 9;
-
-	for (int32 i = 0; i < Particles.Num(); ++i)
-	{
-		model->vertices[model->totalConnectedPoints] = Particles[i].Position.X;
-		model->vertices[model->totalConnectedPoints+1] = Particles[i].Position.X;
-		model->vertices[model->totalConnectedPoints+2] = Particles[i].Position.X;
-
-		model->totalConnectedPoints += POINTS_PER_VERTEX;
-	}
-	// -- Here: ogl.cpp line73
-	for (int32 i = 0; i < smData.tri_count; i += 2)
-	{
-		model->faces[i] = smData.Tris[i].X;
-		model->faces[i + 1] = smData.Tris[i].Y;
-		model->faces[i + 2] = smData.Tris[i].Z;
-		model->totalConnectedTriangles += 1;
-	}
-	for (int32 i = 0; i < smData.vert_count*3; ++i)
-	{
-		model->vertices[model->totalConnectedPoints] = Particles[i].Position.X;
-		model->vertices[model->totalConnectedPoints + 1] = Particles[i].Position.X;
-		model->vertices[model->totalConnectedPoints + 2] = Particles[i].Position.X;
-
-	}
-	*/
-
-	m_meshes.push_back(mesh);
-
+	m_objects.push_back(mesh);
 }
 
 #define K_ANC 4.0
@@ -382,8 +648,7 @@ void UMyHairSim::get_spawn_triangles(const Mesh* m, float thresh, std::vector<Tr
 			faces->push_back(t);
 		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("DBG::spawn tri AABB : min y : % f max y : % f\n"), min_y, max_y);
-	/*	printf("spawn tri AABB: min y: %f max y: %f\n", min_y, max_y);*/
+	UE_LOG(LogTemp, Warning, TEXT("DBG::get_spawn_triangles - AABB : min y : % f max y : % f\n"), min_y, max_y);
 }
 
 float length_sq(const Vector3f& v)
@@ -398,7 +663,7 @@ bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
 
 	if (m == NULL) { UE_LOG(LogTemp, Error, TEXT("Invalid mesh.")); return false; };
 
-	if (hair.size() < num_spawns)
+	if (root_hair.size() < num_spawns)
 	{
 		get_spawn_triangles(m, thresh, &faces);
 
@@ -427,43 +692,141 @@ bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
 			/* weighted sum of the triangle's vertex normals */
 			strand.spawn_dir = (rtriangle.n[0] * bary.x() + rtriangle.n[1] * bary.y() + rtriangle.n[2] * bary.z()).normalized();
 			strand.spawn_pt = rpoint;
-			hair.push_back(strand);
+			root_hair.push_back(strand);
 
 			kd_insert3f(kd, rpoint.x(), rpoint.y(), rpoint.z(), 0);
 		}
 
 		kd_free(kd);
 
-		for (size_t i = 0; i < hair.size(); i++)
+		for (size_t i = 0; i < root_hair.size(); i++)
 		{
-			hair[i].pos = hair[i].spawn_pt + hair[i].spawn_dir * hair_length;
+			root_hair[i].pos = root_hair[i].spawn_pt + root_hair[i].spawn_dir * hair_length;
 		}
 
 		UWorld* world = GetWorld();
-		//DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
-		UE_LOG(LogType, Error, TEXT("Show Hair: %d"), hair.size());
-		for (int32 i = 0; i < hair.size() - 1; ++i)
+		DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
+		UE_LOG(LogType, Warning, TEXT("DBG::init_HairRoot - Show Hair: %d"), root_hair.size());
+		for (int32 i = 0; i < root_hair.size() - 1; ++i)
 		{
-			FVector vec(hair[i].spawn_pt.x(), hair[i].spawn_pt.y(), hair[i].spawn_pt.z());
+			FVector vec(root_hair[i].spawn_pt.x(), root_hair[i].spawn_pt.y(), root_hair[i].spawn_pt.z());
 			DrawDebugPoint(world, vec, 9.f, FColor(255, 0, 255), true, 5.f);
 		}
 	}
 	return true;
 }
 
+void UMyHairSim::loadModel(ModelOBJ* obj)
+{
+	UStaticMesh* usm = m_StaticMesh->GetStaticMesh();
+	if (m_StaticMesh == nullptr) { UE_LOG(LogTemp, Error, TEXT("ERR::HeadMesh::No Static Mesh Set")); }
+
+	// Store Static Mesh LOD0 Buffer Pointers
+	FStaticMeshLODResources* lod0 = *(usm->RenderData->LODResources.GetData());
+	smData.vb = &(lod0->VertexBuffers.PositionVertexBuffer); // Pos
+	smData.smvb = &(lod0->VertexBuffers.StaticMeshVertexBuffer); // Static Mesh Buffer
+	smData.cvb = &(lod0->VertexBuffers.ColorVertexBuffer); // Colour
+	smData.ib = &(lod0->IndexBuffer); // Tri Inds
+	smData.vert_count = smData.vb->GetNumVertices();
+	smData.ind_count = smData.ib->GetNumIndices();
+	smData.tri_count = smData.ind_count / 3;
+	particleCount = smData.vert_count;
+
+	obj->totalConnectedPoints = 0;
+	obj->totalConnectedTriangles = 0;
+	obj->vertices = new float[smData.vert_count * 3];
+	obj->normals = new float[smData.ind_count * 3];
+	obj->faces = new float[smData.ind_count * 3];
+
+	int triangleIndex = 0;
+	int normalIndex = 0;
+
+	// v: x, y, z의 형식의 데이터
+	for (int32 i = 0; i < smData.vert_count; ++i)
+	{
+		obj->vertices[obj->totalConnectedPoints] = smData.vb->VertexPosition(i).X;
+		obj->vertices[obj->totalConnectedPoints + 1] = smData.vb->VertexPosition(i).Y;
+		obj->vertices[obj->totalConnectedPoints + 2] = smData.vb->VertexPosition(i).Z;
+		//UE_LOG(LogTemp, Warning, TEXT("DBG::vertex point %d -> x: %f, y: %f, z: %f\n"), i, smData.vb->VertexPosition(i).X, smData.vb->VertexPosition(i).Y, smData.vb->VertexPosition(i).Z);
+		obj->totalConnectedPoints += POINTS_PER_VERTEX;
+	}
+
+	int num = 0;
+	for (int i = 0; i < smData.tri_count; ++i)
+	{
+		int vertexNumber[4] = { 0, 0, 0 };
+		vertexNumber[0] = smData.ib->GetIndex(3*i);
+		vertexNumber[1] = smData.ib->GetIndex(3*i + 1);
+		vertexNumber[2] = smData.ib->GetIndex(3*i + 2);
+
+		int tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->faces[triangleIndex + tCounter] = obj->vertices[3 * vertexNumber[j]];
+			obj->faces[triangleIndex + tCounter + 1] = obj->vertices[3 * vertexNumber[j] + 1];
+			obj->faces[triangleIndex + tCounter + 2] = obj->vertices[3 * vertexNumber[j] + 2];
+			tCounter += POINTS_PER_VERTEX;
+		}
+		float coord1[3] = { obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2] };
+		float coord2[3] = { obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5] };
+		float coord3[3] = { obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8] };
+
+		/* calculate Vector1 and Vector2 */
+		float va[3], vb[3], vr[3], val;
+
+		va[0] = coord1[0] - coord2[0];
+		va[1] = coord1[1] - coord2[1];
+		va[2] = coord1[2] - coord2[2];
+
+		vb[0] = coord1[0] - coord3[0];
+		vb[1] = coord1[1] - coord3[1];
+		vb[2] = coord1[2] - coord3[2];
+
+		/* cross product */
+		vr[0] = va[1] * vb[2] - vb[1] * va[2];
+		vr[1] = vb[0] * va[2] - va[0] * vb[2];
+		vr[2] = va[0] * vb[1] - vb[0] * va[1];
+
+		/* normalization factor */
+		val = sqrtf(vr[0] * vr[0] + vr[1] * vr[1] + vr[2] * vr[2]);
+
+		float norm[3];
+		norm[0] = vr[0] / val;
+		norm[1] = vr[1] / val;
+		norm[2] = vr[2] / val;
+
+		tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->normals[normalIndex + tCounter] = norm[0];
+			obj->normals[normalIndex + tCounter + 1] = norm[1];
+			obj->normals[normalIndex + tCounter + 2] = norm[2];
+			tCounter += POINTS_PER_VERTEX;
+		}
+
+		triangleIndex += TOTAL_FLOATS_IN_TRIANGLE;
+		normalIndex += TOTAL_FLOATS_IN_TRIANGLE;
+		obj->totalConnectedTriangles += TOTAL_FLOATS_IN_TRIANGLE;
+
+		UE_LOG(LogTemp, Warning, TEXT("DBG::vertex %d -> x: %d, y: %d, z: %d\n"), num, vertexNumber[0], vertexNumber[1], vertexNumber[2]);
+		num++;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("DBG::index triangle: %d, normal: %d\n"), triangleIndex, normalIndex);
+}
+
 void UMyHairSim::InitHairModel()
 {
 	load_meshes();
 
-	if (m_meshes.empty())
+	if (m_objects.empty())
 	{
 		UE_LOG(LogTemp, Error, TEXT("ERR::HeadMesh::No Static Mesh Set")); return;
 	}
 
-	for (size_t i = 0; i < m_meshes.size(); i++)
+	for (size_t i = 0; i < m_objects.size(); i++)
 	{
-		m_meshes[i]->calc_bbox();
-		mesh_head = m_meshes[i];
+		m_objects[i]->calc_bbox();
+		mesh_head = m_objects[i];
 	}
 
 	//	coll_sphere.radius = 1.0;
@@ -478,29 +841,35 @@ void UMyHairSim::InitHairModel()
 	// Root positions, Normal directions, Gravity
 	pilar::Vector3f* roots = new pilar::Vector3f[NUMSTRANDS];
 	pilar::Vector3f* normals = new pilar::Vector3f[NUMSTRANDS];
-	for (int32 i = 0; i < hair.size(); ++i)
+	for (int32 i = 0; i < root_hair.size(); ++i)
 	{
 		roots[i] = pilar::Vector3f(
-			hair[i].spawn_pt.x(),
-			hair[i].spawn_pt.z(),
-			hair[i].spawn_pt.y());
+			root_hair[i].spawn_pt.x(),
+			root_hair[i].spawn_pt.z(),
+			root_hair[i].spawn_pt.y());
 		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Y, m_normal.Z);
+		//normals[i] = roots[i] - pilar::Vector3f(0, 60, 50);
 	}
 
 	//Gravity
 	pilar::Vector3f gravity(0.0f, GRAVITY, 0.0f);
 
 	//Load geometry from file
-	//loadOBJ("monkey.obj", &model); -- 일단 빼고 진행
+	ModelOBJ* model = new ModelOBJ;
+	loadModel(model);
+	float* grid = new float[DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM];
 
-	hairs = new pilar::CUHair(NUMSTRANDS, NUMPARTICLES, NUMCOMPONENTS, MASS,
+	hairs = new pilar::CUHair(NUMSTRANDS, NUMPARTICLES, NUMCOMPONENTS, 1, MASS,
 		K_EDGE, K_BEND, K_TWIST, K_EXTRA,
 		D_EDGE, D_BEND, D_TWIST, D_EXTRA,
 		LENGTH_EDGE, LENGTH_BEND, LENGTH_TWIST,
 		gravity,
 		roots,
-		normals);
+		normals,
+		model,
+		grid);
 
+	// Initialise get_state 
 	pilar::Vector3f* root = new pilar::Vector3f[NUMSTRANDS];
 	hairs->get_state->root = root;
 	pilar::Vector3f* position = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
@@ -508,45 +877,48 @@ void UMyHairSim::InitHairModel()
 	pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->pos = pos;
 	pilar::Vector3f* velo = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
-	hairs->get_state->velocity = velo;
+	hairs->get_state->velh = velo;
 
 	//Initialise positions along normals on the gpu
 	hairs->initialise(position);
+	UE_LOG(LogTemp, Warning, TEXT("DBG::InitHairModel - finish"));
+	delete[] roots;
+	delete[] normals;
+	delete[] grid;
 }
 
 void UMyHairSim::DoOnceSimulation()
 {
 	InitHairModel();
 	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
-	//SimpleHair->set_transform(head_xform);
-	//SimpleHair->update(DeltaTime);
-	//SimpleHair->draw();
+
 	pilar::Vector3f* pos = hairs->get_state->position;
 
-	for (int32 h = 0; h < hairs->h_state->numStrands; h++)
+	for (int32 h = 0; h < hairs->h_state->numStrands; ++h)
 	{
-		for (int32 par = 0; par < hairs->h_state->numParticles; par++)
+		for (int32 par = 0; par < hairs->h_state->numParticles; ++par)
 		{
-			UE_LOG(LogType, Error, TEXT("Update Hair %d"), h * hairs->h_state->numParticles + par);
+			UE_LOG(LogType, Warning, TEXT("DoOnceSimulation - Update Hair %d"), h * hairs->h_state->numParticles + par);
 			UWorld* world = GetWorld();
 
 			FVector vec1(
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
-				hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				pos[h * hairs->h_state->numParticles + par].x,
+				pos[h * hairs->h_state->numParticles + par].z,
+				pos[h * hairs->h_state->numParticles + par].y);
 			DrawDebugPoint(world, vec1, 5.f, FColor(255, 255, 0), true);
 
 			if (par + 1 < hairs->h_state->numParticles)
 			{
 				FVector vec2(
-					hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].x,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].z,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y);
+					pos[h * hairs->h_state->numParticles + par + 1].x,
+					pos[h * hairs->h_state->numParticles + par + 1].z,
+					pos[h * hairs->h_state->numParticles + par + 1].y);
 
 				DrawDebugLine(world, vec1, vec2, FColor::Emerald, true, -1, 0, 2.f);
 			}
 		}
 	}
+	UE_LOG(LogType, Warning, TEXT("DoOnceSimulation - Finish"));
 }
 
 void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -567,8 +939,9 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 		//checkCudaErrors(cudaMemcpy(hairs->get_state->root, hairs->h_state->root, hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		//checkCudaErrors(cudaMemcpy(hairs->get_state->position, hairs->h_state->position, hairs->h_state->numParticles * hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
-		pilar::Vector3f* pos = hairs->get_state->pos;
-		hairs->update(abs(DeltaTime) / 10.0f, pos);
+		pilar::Vector3f* position = hairs->get_state->position;
+		hairs->update(abs(DeltaTime) / 10.0f, position);
+		//hairs->collide(abs(DeltaTime) / 10.0f);
 
 		m_move = m_before - m_after;
 
@@ -595,7 +968,6 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				//hairs->get_state->position[h * hairs->h_state->numParticles + par].y += GetComponentLocation().Z;
 				//hairs->get_state->position[h * hairs->h_state->numParticles + par].z += GetComponentLocation().Y;
 				//UE_LOG(LogType, Log, TEXT("Com Loc - x:%f, y:%f, z:%f"), GetComponentLocation().X, GetComponentLocation().Y , GetComponentLocation().Z);
-				UE_LOG(LogType, Log, TEXT("Com Loc - x:%f, y:%f, z:%f"), m_move.x, m_move.y, m_move.z);
 
 				FVector vec1(
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
@@ -617,7 +989,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 					DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
 				}
 			}
-			UE_LOG(LogType, Error, TEXT("Update %f time, Hair %d"), abs(DeltaTime) / 10.0f, h);
+			//UE_LOG(LogType, Error, TEXT("Update %f time, Hair %d"), abs(DeltaTime) / 10.0f, h);
 			m_after = pilar::Vector3f(GetComponentToWorld().GetLocation().X, GetComponentToWorld().GetLocation().Y, GetComponentToWorld().GetLocation().Z);
 		}
 	}

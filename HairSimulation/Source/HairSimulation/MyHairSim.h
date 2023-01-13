@@ -102,6 +102,7 @@ private:
 
 public:
 	Mesh();
+	~Mesh();
 
 	Aabb* bbox; //? Attach*
 	Material* mtl;
@@ -141,6 +142,8 @@ struct Triangle
 
 namespace pilar
 {
+	void initDistanceField(ModelOBJ *obj, float* grid);
+
 	class CUHair
 	{
 	protected:
@@ -156,6 +159,7 @@ namespace pilar
 		CUHair(int numStrands,
 			int numParticles,
 			int numComponents,
+			int numModel,
 			float mass,
 			float k_edge,
 			float k_bend,
@@ -170,9 +174,10 @@ namespace pilar
 			float length_t,
 			Vector3f gravity,
 			Vector3f* roots,
-			Vector3f* normals
+			Vector3f* normals,
+			ModelOBJ* model,
+			float* grid
 		);
-		//ModelOBJ* model
 		~CUHair();
 
 		void initialise(Vector3f* position);
@@ -243,12 +248,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hair")
 		bool bIsInitMesh = true;
 	UPROPERTY(EditAnywhere, CallInEditor, Category = "Hair")
-		FVector m_normal = FVector(1.0f, 0.5f, 0.0f);
+		FVector m_normal = FVector(1.0f, 1.0f, 1.0f);
 	
 	//void OnRegister() override;
-	vector<Mesh*> m_meshes;
+	vector<Mesh*> m_objects;
 	Mesh* mesh_head;
-	vector<HairStrand> hair;
+	//ModelOBJ* m_model;
+
+	vector<HairStrand> root_hair;
 	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);
 	pilar::Vector3f m_after = pilar::Vector3f(0.0f, 0.0f, 0.0f);
 	pilar::Vector3f m_move = pilar::Vector3f(0.0f, 0.0f, 0.0f);
@@ -258,8 +265,8 @@ public:
 	UMyHairSim(const FObjectInitializer& ObjectInitializer);
 
 	bool init_HairRoot(const Mesh* m, int num_spawns, float thresh = 0.4);
+	void loadModel(ModelOBJ* obj);
 	void InitHairModel();
-
 
 	void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 

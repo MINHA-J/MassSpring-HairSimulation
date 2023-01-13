@@ -8,6 +8,7 @@
 __global__
 void initialise(pilar::HairState* state)
 {
+	printf("initialise\n");
 	pilar::Vector3f* root = state->root;
 	pilar::Vector3f* normal = state->normal;
 	pilar::Vector3f* position = state->position;
@@ -1098,52 +1099,61 @@ float quadratic_solve(float a, float b, float c)
 	}
 	return t0_;
 }
-__host__ __device__
+__device__
 float dot(const pilar::Vector3f &a, const pilar::Vector3f &b)
 {
 	return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
 __device__
-void intersect(pilar::HairState* state)
+void intersect(float dt, pilar::HairState* state)
 {
 	//State pointers
 	pilar::Sphere* s = state->Head;
 	pilar::Vector3f* position = state->position;
-	pilar::Vector3f* pos = state->save_pos;
 
-	int startP = blockIdx.x * state->numParticles;
-	int endP = startP + state->numParticles;
+	//Strand ID
+	int sid = blockIdx.x;
+	int start = state->numParticles * sid;
+	int end = start + state->numParticles;
 
-	for (int i = startP; i < endP; i++)
+	for (int i = start; i < end; i++)
 	{
-		// Move coordinate system and set center of sphere to origin
-		pilar::Vector3f o = pos[i] - s->pos;
-		pilar::Vector3f d = position[i] - pos[i];
+		pilar::Vector3f center = pilar::Vector3f(s->pos.x, s->pos.z, s->pos.y);
+		float Gap = dot(position[i] - center, position[i] - center);
 
-
-		//Build spehre coefficients
-		float a = dot(d, d);
-		float b = 2.0 * dot(d, o);
-		float c = dot(o, o) - s->radius * s->radius;
-
-		float t0 = quadratic_solve(a, b, c);
-
-		if (t0 > 0.0 && t0 <= 1.0)
+		if (Gap < s->radius*s->radius)
 		{
-			pilar::Vector3f intersection = o + d * t0;
-			intersection.unitize();
-			pilar::Vector3f n = intersection;
-
-			// The d of the plane is -radius
-			//pilar::Vector3f newpos = pos[i] - n * (10.f) * (dot(n, pos[i] - s->pos) - s->radius);
-			position[i] = pos[i] - n * (1.0f + 0.5f) * (dot(n, pos[i] - s->pos) - s->radius);
-			pilar::Vector3f d_proj = n * dot(n, d);
-			pilar::Vector3f v_bounce = d - d_proj * (1.0f + 0.5f);
-			pilar::Vector3f v_friction = v_bounce - (d - d_proj)*(1.f);
-			state->pos[i] = position[i] - v_friction;
-			//position[i] = newpos - v_friction;
+			//position[i] = pilar::Vector3f(0.0f, 80.f, 0.0f);
+			pilar::Vector3f outposition = (position[i] - s->pos)*(s->radius - sqrt(Gap));
+			state->velh[i] = (outposition - position[i]) / dt;
 		}
+		// Move coordinate system and set center of sphere to origin
+		//pilar::Vector3f o = position[i-1] - s->pos;
+		//pilar::Vector3f d = position[i] - position[i-1];
+
+		////Build spehre coefficients
+		//float a = dot(d, d);
+		//float b = 2.0 * dot(d, o);
+		//float c = dot(o, o) - s->radius * s->radius;
+
+		//float t0 = quadratic_solve(a, b, c);
+
+		//if (t0 > 0.0 && t0 <= 1.0)
+		//{
+		//	pilar::Vector3f intersection = o + d * t0;
+		//	intersection.unitize();
+		//	pilar::Vector3f n = intersection;
+
+		//	// The d of the plane is -radius
+		//	//pilar::Vector3f newpos = pos[i] - n * (10.f) * (dot(n, pos[i] - s->pos) - s->radius);
+		//	position[i] = position[i - 1] - n * (1.0f + 0.5f) * (dot(n, position[i - 1] - s->pos) - s->radius);
+		//	pilar::Vector3f d_proj = n * dot(n, d);
+		//	pilar::Vector3f v_bounce = d - d_proj * (1.0f + 0.5f);
+		//	pilar::Vector3f v_friction = v_bounce - (d - d_proj)*(1.f);
+		//	position[i] = position[i] - v_friction;
+		//	//position[i] = newpos - v_friction;
+		//}
 	}
 }
 
@@ -1166,10 +1176,6 @@ void update(float dt, pilar::HairState* state)
 	//Calculate half velocities using forces
 	updateVelocities(dt, state);
 
-	//++Sphere(Head) Intersection
-	//updatePositions(dt, state);
-	//intersect(state);
-
 	applyStrainLimiting(dt, state);
 
 	//Calculate half position and new position
@@ -1185,6 +1191,14 @@ void update(float dt, pilar::HairState* state)
 	applyForce(mgravity, state);
 
 	//Calculate half velocity and new velocity
+	updateParticles(dt, state);
+
+	//++Sphere(Head) Intersection
+	intersect(dt, state);
+	updatePositions(dt, state);
+	calcVelocities(dt, state);
+	updateSprings(dt, state);
+	applyForce(mgravity, state);
 	updateParticles(dt, state);
 }
 

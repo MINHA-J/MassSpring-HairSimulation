@@ -19,7 +19,7 @@
 #define D_BEND				12500.0f // ~ 250.0f
 #define D_TWIST				12500.0f // ~ 250.0f
 #define D_EXTRA				625.0f // ~ 12.5f
-#define GRAVITY				-600.f //(stable value) -0.00981f
+#define GRAVITY				-9810.f //(stable value) -0.00981f
 
 //Stiction constants
 #define K_STIC				0.01f //Stiction spring coefficient
@@ -37,9 +37,11 @@
 
 //Geometry collisions constants
 #define DOMAIN_DIM		100
-#define DOMAIN_WIDTH	0.275f
-#define DOMAIN_HALF		0.1375f
-#define CELL_WIDTH		0.00275f
-#define CELL_HALF		0.001375f
+#define DOMAIN_WIDTH	1110.f
+#define DOMAIN_HALF		555.f
+#define CELL_WIDTH		11.1f
+#define CELL_HALF		5.55f
 
+#define POINTS_PER_VERTEX 3
+#define TOTAL_FLOATS_IN_TRIANGLE 9
 #endif

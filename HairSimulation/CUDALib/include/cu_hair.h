@@ -6,6 +6,7 @@
 #include "device_launch_parameters.h"
 
 #include "tools.h"
+#include <iostream>
 #include <helper_cuda.h>
 #include <helper_functions.h>
 #include <curand_kernel.h>
@@ -16,8 +17,7 @@ struct ModelOBJ
 	float* vertices;
 	float* normals;
 	float* faces;	//Triangles
-	
-	long bytes;
+
 	long totalConnectedPoints;
 	long totalConnectedTriangles;
 };
@@ -25,7 +25,7 @@ struct ModelOBJ
 namespace pilar
 {
 	//-- My Code
-	struct Sphere 
+	struct Sphere
 	{
 		Vector3f pos;
 		float radius;
@@ -39,17 +39,21 @@ namespace pilar
 
 		Vector3f* root;
 		Vector3f* normal;
-		Vector3f* position;	
+
+		Vector3f* position;	//previous
 		Vector3f* save_pos;
-		Vector3f* pos;		//previous position
+		Vector3f* pos;		//current
 		Vector3f* posc;		//candidate position
 		Vector3f* posh;		//half position
+
 		Vector3f* velocity;
 		Vector3f* velh;		//half velocity
+
 		Vector3f* force;
 
 		Vector3f gravity;
 
+		// Strand
 		int numStrands;
 		int numParticles;
 		int numComponents;
@@ -66,13 +70,15 @@ namespace pilar
 		float length_e;
 		float length_b;
 		float length_t;
-		
+
 		Sphere* Head;
-		//ModelOBJ* model;
+		ModelOBJ* model;
+		int numModel;
+		float* grid;
 		//float* vertices;
 		//float* normals;
 		//float* faces;
-		
+
 		curandStatePhilox4_32_10_t* rng;
 	};
 }
@@ -86,6 +92,11 @@ __device__ void updateVelocities(float dt, pilar::HairState* state);
 __device__ void updatePositions(float dt, pilar::HairState* state);
 __device__ void updateParticles(float dt, pilar::HairState* state);
 __device__ void applyStrainLimiting(float dt, pilar::HairState* state);
+
+//__device__ void initDistanceField(pilar::HairState* state);
+__device__ float quadratic_solve(float a, float b, float c);
+__device__ float dot(const pilar::Vector3f &a, const pilar::Vector3f &b);
+__device__ void objectCollisions(float dt, pilar::HairState* state);
 
 __global__ void initialise(pilar::HairState* state);
 __global__ void update(float dt, pilar::HairState* state);
