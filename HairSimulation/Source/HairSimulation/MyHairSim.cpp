@@ -74,7 +74,6 @@ namespace pilar
 		{
 			float triangle[3][POINTS_PER_VERTEX];
 
-
 			for (int j = 0; j < POINTS_PER_VERTEX; j++)
 			{
 				triangle[j][0] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3];
@@ -335,8 +334,8 @@ namespace pilar
 					if (indexgrid < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM)
 					{
 						grid[indexgrid] = result[i][j][k];
-						//if (result[i][j][k] < FLT_MAX)
-						//	UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
+						if (result[i][j][k] < FLT_MAX)
+							UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
 					}
 				}
 	}
@@ -402,11 +401,12 @@ namespace pilar
 		//checkCudaErrors(cudaMalloc((void**)&d_state, sizeof(pilar::HairState)));
 
 		//Copy root positions and normal directions to GPU
-		copyRoots(roots, normals, h_state);
+		copyRoots(roots, normals, grid, h_state);
 
 		get_state = new HairState;
 		get_state->root = roots;
 		get_state->normal = normals;
+		get_state->grid = grid;
 
 		//Copy object model data to GPU
 		//copyModel(model, h_state);
@@ -705,7 +705,7 @@ bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
 		}
 
 		UWorld* world = GetWorld();
-		DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
+		//DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
 		UE_LOG(LogType, Warning, TEXT("DBG::init_HairRoot - Show Hair: %d"), root_hair.size());
 		for (int32 i = 0; i < root_hair.size() - 1; ++i)
 		{
@@ -741,13 +741,16 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 	int triangleIndex = 0;
 	int normalIndex = 0;
 
+	UWorld* world = GetWorld();
+
 	// v: x, y, z의 형식의 데이터
 	for (int32 i = 0; i < smData.vert_count; ++i)
 	{
+		// ? 좌표계 문제인가 싶어 y, z 바꿔봄
 		obj->vertices[obj->totalConnectedPoints] = smData.vb->VertexPosition(i).X;
-		obj->vertices[obj->totalConnectedPoints + 1] = smData.vb->VertexPosition(i).Y;
-		obj->vertices[obj->totalConnectedPoints + 2] = smData.vb->VertexPosition(i).Z;
-		//UE_LOG(LogTemp, Warning, TEXT("DBG::vertex point %d -> x: %f, y: %f, z: %f\n"), i, smData.vb->VertexPosition(i).X, smData.vb->VertexPosition(i).Y, smData.vb->VertexPosition(i).Z);
+		obj->vertices[obj->totalConnectedPoints + 1] = smData.vb->VertexPosition(i).Z;
+		obj->vertices[obj->totalConnectedPoints + 2] = smData.vb->VertexPosition(i).Y;
+		//DrawDebugPoint(world, smData.vb->VertexPosition(i), 2, FColor(52, 220, 239), true);
 		obj->totalConnectedPoints += POINTS_PER_VERTEX;
 	}
 
@@ -767,6 +770,7 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 			obj->faces[triangleIndex + tCounter + 2] = obj->vertices[3 * vertexNumber[j] + 2];
 			tCounter += POINTS_PER_VERTEX;
 		}
+
 		float coord1[3] = { obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2] };
 		float coord2[3] = { obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5] };
 		float coord3[3] = { obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8] };
@@ -781,6 +785,7 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 		vb[0] = coord1[0] - coord3[0];
 		vb[1] = coord1[1] - coord3[1];
 		vb[2] = coord1[2] - coord3[2];
+
 
 		/* cross product */
 		vr[0] = va[1] * vb[2] - vb[1] * va[2];
@@ -811,6 +816,17 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 		UE_LOG(LogTemp, Warning, TEXT("DBG::vertex %d -> x: %d, y: %d, z: %d\n"), num, vertexNumber[0], vertexNumber[1], vertexNumber[2]);
 		num++;
 	}
+
+	for (int i = 0; i < triangleIndex; i+= TOTAL_FLOATS_IN_TRIANGLE)
+	{
+		FVector vec1(obj->faces[i], obj->faces[i+1], obj->faces[i+2]);
+		FVector vec2(obj->faces[i+3], obj->faces[i + 4], obj->faces[i + 5]);
+		FVector vec3(obj->faces[i+6], obj->faces[i + 7], obj->faces[i + 8]);
+		DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.5);
+		DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.5);
+		DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.5);
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("DBG::index triangle: %d, normal: %d\n"), triangleIndex, normalIndex);
 }
 
@@ -878,6 +894,16 @@ void UMyHairSim::InitHairModel()
 	hairs->get_state->pos = pos;
 	pilar::Vector3f* velo = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->velh = velo;
+	hairs->get_state->grid = grid; 
+
+	// ?
+	//UWorld* world = GetWorld();
+	//for (int i = 0; i < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM; i += 3)
+	//{
+	//	FVector vec1(hairs->get_state->grid[i], hairs->get_state->grid[i + 1], hairs->get_state->grid[i + 2]);
+	//	FVector vec2(hairs->get_state->grid[i + 3], hairs->get_state->grid[i + 4], hairs->get_state->grid[i + 5]);
+	//	DrawDebugLine(world, vec1, vec2, FColor::Silver, true, -1, 0, 0.7);
+	//}
 
 	//Initialise positions along normals on the gpu
 	hairs->initialise(position);
@@ -973,7 +999,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.2f);
+				DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.1f);
 
 				if (par + 1 < hairs->h_state->numParticles)
 				{

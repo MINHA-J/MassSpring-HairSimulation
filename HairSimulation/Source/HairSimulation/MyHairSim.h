@@ -33,7 +33,7 @@ extern "C"
 void updateStrands(float dt, pilar::HairState* h_state, pilar::HairState* d_state);
 
 extern "C"
-void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, pilar::HairState* h_state);
+void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, float* grid, pilar::HairState* h_state);
 
 extern "C"
 void copyState(pilar::HairState* h_state, pilar::HairState* d_state);

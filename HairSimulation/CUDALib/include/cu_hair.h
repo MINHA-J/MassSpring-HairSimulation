@@ -104,7 +104,7 @@ __global__ void update(float dt, pilar::HairState* state);
 static void* mallocBytes(int bytes);
 extern "C" void mallocStrands(pilar::HairState * h_state, pilar::HairState * &d_state);
 extern "C" void freeStrands(pilar::HairState* h_state, pilar::HairState* d_state);
-extern "C" void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, pilar::HairState* h_state);
+extern "C" void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, float* grid, pilar::HairState* h_state);
 extern "C" void copyState(pilar::HairState* h_state, pilar::HairState* d_state);
 extern "C" void initialisePositions(pilar::HairState* h_state, pilar::HairState* d_state);
 extern "C" void updateStrands(float dt, pilar::HairState* h_state, pilar::HairState* d_state);

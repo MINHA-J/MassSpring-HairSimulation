@@ -5,20 +5,20 @@
 #define NUMPARTICLES		10 //Needs to be multiples of 5???
 #define NUMCOMPONENTS		3 // 3D vectors
 #define NUMSEGMENTS			(NUMPARTICLES-1)
-#define MASS				NUMSTRANDS * 0.001f // ~ 0.000000001f particle mass is 0.01mg, total strand weight is 1mg
-#define K_EDGE				16000.0f // ~ (stable value) 10000000.0f
-#define K_BEND				400.0f // ~ 8.0f
-#define K_TWIST				400.0f // ~ 8.0f
-#define K_EXTRA				24.525f // ~ 0.4905f
+#define MASS				NUMSTRANDS * 0.01f // ~ 0.000000001f particle mass is 0.01mg, total strand weight is 1mg
+#define K_EDGE				10000000.0f // ~ (stable value) 10000000.0f
+#define K_BEND				8.0f // ~ 8.0f
+#define K_TWIST				8.0f // ~ 8.0f
+#define K_EXTRA				0.4905f // ~ 0.4905f
 #define LENGTH				25.0f //0.5f //5 millmetres separation between particles
 #define LENGTH_EDGE			LENGTH  // ~ length between edge springs
 #define LENGTH_BEND			LENGTH // ~ length between bending springs
 #define LENGTH_TWIST		LENGTH  // ~ length between twisting springs
 #define LENGTH_EXTRA		LENGTH
-#define D_EDGE				160000.0f // ~ 3200.0f
-#define D_BEND				12500.0f // ~ 250.0f
-#define D_TWIST				12500.0f // ~ 250.0f
-#define D_EXTRA				625.0f // ~ 12.5f
+#define D_EDGE				160000.f // ~ 3200.0f
+#define D_BEND				12500.f // ~ 250.0f
+#define D_TWIST				12500.f // ~ 250.0f
+#define D_EXTRA				625.f // ~ 12.5f
 #define GRAVITY				-9810.f //(stable value) -0.00981f
 
 //Stiction constants
@@ -37,10 +37,10 @@
 
 //Geometry collisions constants
 #define DOMAIN_DIM		100
-#define DOMAIN_WIDTH	1110.f
-#define DOMAIN_HALF		555.f
-#define CELL_WIDTH		11.1f
-#define CELL_HALF		5.55f
+#define DOMAIN_WIDTH	1375.f
+#define DOMAIN_HALF		687.5f
+#define CELL_WIDTH		13.75f
+#define CELL_HALF		6.875f
 
 #define POINTS_PER_VERTEX 3
 #define TOTAL_FLOATS_IN_TRIANGLE 9
