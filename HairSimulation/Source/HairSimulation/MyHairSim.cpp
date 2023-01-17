@@ -63,7 +63,7 @@ namespace pilar
 					result[xx][yy][zz] = FLT_MAX;
 
 		//calculate triangle normal scaling factor
-		float delta = 2.5f;
+		float delta = 0.25f;
 		float echo = CELL_WIDTH * delta;
 
 		int numVertices = obj->totalConnectedPoints / POINTS_PER_VERTEX;
@@ -123,10 +123,12 @@ namespace pilar
 
 			//normalise to the grid
 			aabb[0][0] = (aabb[0][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
-			aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+			//aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+			aabb[0][1] = (aabb[0][1] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
 			aabb[0][2] = (aabb[0][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
 			aabb[1][0] = (aabb[1][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
-			aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta / 2) - CELL_HALF) / CELL_WIDTH;
+			//aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+			aabb[1][1] = (aabb[1][1] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
 			aabb[1][2] = (aabb[1][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
 
 			//round aabb
@@ -177,7 +179,8 @@ namespace pilar
 					{
 						//Denormalise from grid to centre of cell
 						float xpos = xx * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
-						float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
+						// float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
+						float ypos = yy * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
 						float zpos = zz * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
 
 						//dot product between gridpoint and triangle normal
@@ -334,8 +337,8 @@ namespace pilar
 					if (indexgrid < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM)
 					{
 						grid[indexgrid] = result[i][j][k];
-						if (result[i][j][k] < FLT_MAX)
-							UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
+						//if (result[i][j][k] < FLT_MAX)
+						//	UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
 					}
 				}
 	}
@@ -439,7 +442,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->root, h_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->velh, h_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
 	}
 
@@ -449,7 +452,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(h_state->root, get_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->pos, get_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->position, position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
-		checkCudaErrors(cudaMemcpy(h_state->velh, get_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(h_state->velocity, get_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 
 		updateStrands(dt, h_state, d_state);
 
@@ -457,7 +460,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->root, h_state->root, h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->velh, h_state->velh, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 
 	}
 }
@@ -813,7 +816,7 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 		normalIndex += TOTAL_FLOATS_IN_TRIANGLE;
 		obj->totalConnectedTriangles += TOTAL_FLOATS_IN_TRIANGLE;
 
-		UE_LOG(LogTemp, Warning, TEXT("DBG::vertex %d -> x: %d, y: %d, z: %d\n"), num, vertexNumber[0], vertexNumber[1], vertexNumber[2]);
+		//UE_LOG(LogTemp, Warning, TEXT("DBG::vertex %d -> x: %d, y: %d, z: %d\n"), num, vertexNumber[0], vertexNumber[1], vertexNumber[2]);
 		num++;
 	}
 
@@ -892,8 +895,8 @@ void UMyHairSim::InitHairModel()
 	hairs->get_state->position = position;
 	pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
 	hairs->get_state->pos = pos;
-	pilar::Vector3f* velo = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
-	hairs->get_state->velh = velo;
+	pilar::Vector3f* velocity = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+	hairs->get_state->velocity = velocity;
 	hairs->get_state->grid = grid; 
 
 	// ?
@@ -907,6 +910,7 @@ void UMyHairSim::InitHairModel()
 
 	//Initialise positions along normals on the gpu
 	hairs->initialise(position);
+
 	UE_LOG(LogTemp, Warning, TEXT("DBG::InitHairModel - finish"));
 	delete[] roots;
 	delete[] normals;
@@ -953,11 +957,12 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 	if (bStartSimulate)
 	{
 		m_before = pilar::Vector3f(GetComponentToWorld().GetLocation().X, GetComponentToWorld().GetLocation().Y, GetComponentToWorld().GetLocation().Z);
-
+		UWorld* world = GetWorld();
 		if (bIsInitMesh)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
 			InitHairModel();
+			DrawDebugBox(world, FVector(0,0,0), FVector(CELL_WIDTH * DOMAIN_DIM, CELL_WIDTH * DOMAIN_DIM, CELL_WIDTH * DOMAIN_DIM), FColor::Purple, true, -1, 0, 5);
 			bIsInitMesh = false;
 		}
 
@@ -973,7 +978,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 
 		for (int32 h = 0; h < hairs->h_state->numStrands; h++)
 		{
-			UWorld* world = GetWorld();
+			
 			hairs->get_state->root[h].x += m_move.x;
 			hairs->get_state->root[h].y += m_move.z;
 			hairs->get_state->root[h].z += m_move.y;
@@ -993,7 +998,16 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				//hairs->get_state->position[h * hairs->h_state->numParticles + par].x += GetComponentLocation().X;
 				//hairs->get_state->position[h * hairs->h_state->numParticles + par].y += GetComponentLocation().Z;
 				//hairs->get_state->position[h * hairs->h_state->numParticles + par].z += GetComponentLocation().Y;
-				//UE_LOG(LogType, Log, TEXT("Com Loc - x:%f, y:%f, z:%f"), GetComponentLocation().X, GetComponentLocation().Y , GetComponentLocation().Z);
+				UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
+					h, par,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+					h, par,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
 
 				FVector vec1(
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,

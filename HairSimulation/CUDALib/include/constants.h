@@ -37,10 +37,11 @@
 
 //Geometry collisions constants
 #define DOMAIN_DIM		100
-#define DOMAIN_WIDTH	1375.f
-#define DOMAIN_HALF		687.5f
-#define CELL_WIDTH		13.75f
-#define CELL_HALF		6.875f
+#define DOMAIN_WIDTH	1380.f
+#define DOMAIN_HALF		690.f
+#define CELL_WIDTH		13.8f
+#define CELL_HALF		6.9f
+#define SCALE_FACTOR	125.f
 
 #define POINTS_PER_VERTEX 3
 #define TOTAL_FLOATS_IN_TRIANGLE 9

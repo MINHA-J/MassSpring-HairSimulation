@@ -96,6 +96,7 @@ __device__ void applyStrainLimiting(float dt, pilar::HairState* state);
 //__device__ void initDistanceField(pilar::HairState* state);
 __device__ float quadratic_solve(float a, float b, float c);
 __device__ float dot(const pilar::Vector3f &a, const pilar::Vector3f &b);
+__device__ void clearForces(pilar::HairState* state);
 __device__ void objectCollisions(float dt, pilar::HairState* state);
 
 __global__ void initialise(pilar::HairState* state);
