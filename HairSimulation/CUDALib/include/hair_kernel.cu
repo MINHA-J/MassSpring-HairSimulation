@@ -32,7 +32,17 @@ void initialise(pilar::HairState* state)
 
 	//Create a random number generator for each strand
 	curand_init(0, sid, 0, &state->rng[sid]);
+
+	//Initialise distance field
+	//initDistanceField(state);
 }
+
+//__device__ 
+//void initDistanceField(pilar::HairState* state)
+//{
+//	//Strand ID
+//	int sid = blockIdx.x;
+//}
 
 __device__
 void buildAB(float dt, pilar::HairState* state)
@@ -678,6 +688,24 @@ void conjugate(pilar::HairState* state)
 	}
 }
 
+__device__ 
+void clearForces(pilar::HairState* state)
+{
+	//State pointers
+	pilar::Vector3f* force = state->force;
+
+	int startP = blockIdx.x * state->numParticles;
+	int endP = startP + state->numParticles;
+
+	for (int i = startP; i < endP; i++)
+	{
+		//Reset forces on particles
+		force[i].x = 0.0f;
+		force[i].y = 0.0f;
+		force[i].z = 0.0f;
+	}
+}
+
 __device__
 void calcVelocities(float dt, pilar::HairState* state)
 {
@@ -1064,7 +1092,6 @@ void applyStrainLimiting(float dt, pilar::HairState* state)
 __device__
 float quadratic_solve(float a, float b, float c)
 {
-
 	const float discriminant = b * b - 4.0 * a * c;
 	if (discriminant < 0.0)
 	{
@@ -1106,11 +1133,13 @@ float dot(const pilar::Vector3f &a, const pilar::Vector3f &b)
 }
 
 __device__
-void intersect(float dt, pilar::HairState* state)
+void objectCollisions(float dt, pilar::HairState* state)
 {
 	//State pointers
 	pilar::Sphere* s = state->Head;
 	pilar::Vector3f* position = state->position;
+	pilar::Vector3f* velocity = state->velocity;
+	float *grid = state->grid;
 
 	//Strand ID
 	int sid = blockIdx.x;
@@ -1119,41 +1148,72 @@ void intersect(float dt, pilar::HairState* state)
 
 	for (int i = start; i < end; i++)
 	{
-		pilar::Vector3f center = pilar::Vector3f(s->pos.x, s->pos.z, s->pos.y);
-		float Gap = dot(position[i] - center, position[i] - center);
+		//Transform particle coordinates to collision grid coordinates
+		pilar::Vector3f P (
+			(position[i].x + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH, 
+			(position[i].y + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH, 
+			(position[i].z + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH
+		);
+		//P.x = (position[i].x + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+		//P.y = (position[i].y + DOMAIN_HALF + (SCALE_FACTOR/2) - CELL_HALF) / CELL_WIDTH;
+		//P.y = (position[i].y + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+		//P.z = (position[i].z + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
 
-		if (Gap < s->radius*s->radius)
+		pilar::Vector3i min(int(P.x), int(P.y), int(P.z));
+		pilar::Vector3i max(min.x + 1, min.y + 1, min.z + 1);
+
+		float v000 = grid[(DOMAIN_DIM * DOMAIN_DIM * min.x) + (DOMAIN_DIM * min.y) + min.z];
+		float v100 = grid[(DOMAIN_DIM * DOMAIN_DIM * max.x) + (DOMAIN_DIM * min.y) + min.z];
+		float v001 = grid[(DOMAIN_DIM * DOMAIN_DIM * min.x) + (DOMAIN_DIM * min.y) + max.z];
+		float v101 = grid[(DOMAIN_DIM * DOMAIN_DIM * max.x) + (DOMAIN_DIM * min.y) + max.z];
+		float v010 = grid[(DOMAIN_DIM * DOMAIN_DIM * min.x) + (DOMAIN_DIM * max.y) + min.z];
+		float v110 = grid[(DOMAIN_DIM * DOMAIN_DIM * max.x) + (DOMAIN_DIM * max.y) + min.z];
+		float v011 = grid[(DOMAIN_DIM * DOMAIN_DIM * min.x) + (DOMAIN_DIM * max.y) + max.z];
+		float v111 = grid[(DOMAIN_DIM * DOMAIN_DIM * max.x) + (DOMAIN_DIM * max.y) + max.z];
+
+		pilar::Vector3f d(
+			(P.x - min.x) / (max.x - min.x), 
+			(P.y - min.y) / (max.y - min.y), 
+			(P.z - min.z) / (max.z - min.z)
+		);
+
+		float c0 = v000 * (1 - d.x) + v100 * d.x;
+		float c1 = v001 * (1 - d.x) + v101 * d.x;
+		float c2 = v010 * (1 - d.x) + v110 * d.x;
+		float c3 = v011 * (1 - d.x) + v111 * d.x;
+
+		float c00 = c0 * (1 - d.z) + c1 * d.z;
+		float c11 = c2 * (1 - d.z) + c3 * d.z;
+
+		float c000 = c00 * (1 - d.y) + c11 * d.y;
+
+		//Calculate normal
+		pilar::Vector3f normal(
+			-v000 * d.y*d.z + v001 * d.y*d.z + v010 * d.y*d.z - v011 * d.y*d.z + v100 * d.y*d.z - v101 * d.y*d.z - v110 * d.y*d.z + v111 * d.y*d.z + v000 * d.y + v000 * d.z - v001 * d.y - v010 * d.z - v100 * d.y - v100 * d.z + v101 * d.y + v110 * d.z - v000 + v100,
+			-v000 * d.x*d.z + v001 * d.x*d.z + v010 * d.x*d.z - v011 * d.x*d.z + v100 * d.x*d.z - v101 * d.x*d.z - v110 * d.x*d.z + v111 * d.x*d.z + v000 * d.x + v000 * d.z - v001 * d.x - v001 * d.z - v010 * d.z + v011 * d.z - v100 * d.x + v101 * d.x - v000 + v001,
+			-v000 * d.x*d.y + v001 * d.x*d.y + v010 * d.x*d.y - v011 * d.x*d.y + v100 * d.x*d.y - v101 * d.x*d.y - v110 * d.x*d.y + v111 * d.x*d.y + v000 * d.x + v000 * d.y - v001 * d.y - v010 * d.x - v010 * d.y + v011 * d.y - v100 * d.x + v110 * d.x - v000 + v010
+		);
+		//normal.x = -v000 * d.y*d.z + v001 * d.y*d.z + v010 * d.y*d.z - v011 * d.y*d.z + v100 * d.y*d.z - v101 * d.y*d.z - v110 * d.y*d.z + v111 * d.y*d.z + v000 * d.y + v000 * d.z - v001 * d.y - v010 * d.z - v100 * d.y - v100 * d.z + v101 * d.y + v110 * d.z - v000 + v100;
+		//normal.y = -v000 * d.x*d.z + v001 * d.x*d.z + v010 * d.x*d.z - v011 * d.x*d.z + v100 * d.x*d.z - v101 * d.x*d.z - v110 * d.x*d.z + v111 * d.x*d.z + v000 * d.x + v000 * d.z - v001 * d.x - v001 * d.z - v010 * d.z + v011 * d.z - v100 * d.x + v101 * d.x - v000 + v001;
+		//normal.z = -v000 * d.x*d.y + v001 * d.x*d.y + v010 * d.x*d.y - v011 * d.x*d.y + v100 * d.x*d.y - v101 * d.x*d.y - v110 * d.x*d.y + v111 * d.x*d.y + v000 * d.x + v000 * d.y - v001 * d.y - v010 * d.x - v010 * d.y + v011 * d.y - v100 * d.x + v110 * d.x - v000 + v010;
+
+		//Normalise
+		normal.unitize();
+
+		float phi = c000 + dt * (velocity[i].dot(normal));
+
+		//Check for surface collision
+		if (phi < 0.0f)
 		{
-			//position[i] = pilar::Vector3f(0.0f, 80.f, 0.0f);
-			pilar::Vector3f outposition = (position[i] - s->pos)*(s->radius - sqrt(Gap));
-			state->velh[i] = (outposition - position[i]) / dt;
+			float vn = velocity[i].dot(normal);
+			pilar::Vector3f vt = velocity[i] - normal * vn;
+
+			float vnew = vn - phi / dt;
+			float friction = 1.0f - 0.3f*(vnew - vn) / vt.length();
+			pilar::Vector3f vrel = (0.0f > friction) ? vt * 0.1f : vt * friction;
+
+			//velocity[i] = normal * vnew + vrel;
 		}
-		// Move coordinate system and set center of sphere to origin
-		//pilar::Vector3f o = position[i-1] - s->pos;
-		//pilar::Vector3f d = position[i] - position[i-1];
-
-		////Build spehre coefficients
-		//float a = dot(d, d);
-		//float b = 2.0 * dot(d, o);
-		//float c = dot(o, o) - s->radius * s->radius;
-
-		//float t0 = quadratic_solve(a, b, c);
-
-		//if (t0 > 0.0 && t0 <= 1.0)
-		//{
-		//	pilar::Vector3f intersection = o + d * t0;
-		//	intersection.unitize();
-		//	pilar::Vector3f n = intersection;
-
-		//	// The d of the plane is -radius
-		//	//pilar::Vector3f newpos = pos[i] - n * (10.f) * (dot(n, pos[i] - s->pos) - s->radius);
-		//	position[i] = position[i - 1] - n * (1.0f + 0.5f) * (dot(n, position[i - 1] - s->pos) - s->radius);
-		//	pilar::Vector3f d_proj = n * dot(n, d);
-		//	pilar::Vector3f v_bounce = d - d_proj * (1.0f + 0.5f);
-		//	pilar::Vector3f v_friction = v_bounce - (d - d_proj)*(1.f);
-		//	position[i] = position[i] - v_friction;
-		//	//position[i] = newpos - v_friction;
-		//}
 	}
 }
 
@@ -1161,6 +1221,9 @@ void intersect(float dt, pilar::HairState* state)
 __global__
 void update(float dt, pilar::HairState* state)
 {
+	//Reset forces on particles
+	clearForces(state);
+
 	//Calculate candidate velocities
 	calcVelocities(dt, state);
 
@@ -1181,6 +1244,9 @@ void update(float dt, pilar::HairState* state)
 	//Calculate half position and new position
 	updatePositions(dt, state);
 
+	//Check geometry collisions and adjust velocities and positions
+	//objectCollisions(dt, state);
+
 	//Calculate velocities using half position
 	calcVelocities(dt, state);
 
@@ -1191,14 +1257,6 @@ void update(float dt, pilar::HairState* state)
 	applyForce(mgravity, state);
 
 	//Calculate half velocity and new velocity
-	updateParticles(dt, state);
-
-	//++Sphere(Head) Intersection
-	intersect(dt, state);
-	updatePositions(dt, state);
-	calcVelocities(dt, state);
-	updateSprings(dt, state);
-	applyForce(mgravity, state);
 	updateParticles(dt, state);
 }
 
@@ -1249,6 +1307,8 @@ void mallocStrands(pilar::HairState* h_state, pilar::HairState* &d_state)
 	h_state->force = (pilar::Vector3f*) mallocBytes(h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f));
 	h_state->rng = (curandStatePhilox4_32_10_t*)mallocBytes(h_state->numStrands * sizeof(curandStatePhilox4_32_10_t));
 	h_state->Head = (pilar::Sphere*)mallocBytes(sizeof(pilar::Sphere));
+	h_state->model = (ModelOBJ*)mallocBytes(sizeof(ModelOBJ));
+	h_state->grid = (float*)mallocBytes(DOMAIN_DIM * DOMAIN_DIM * DOMAIN_DIM * sizeof(float));
 	//checkCudaErrors(cudaMalloc(&d_state, sizeof(pilar::HairState)));
 	d_state = (pilar::HairState*) mallocBytes(sizeof(pilar::HairState));
 }
@@ -1273,15 +1333,19 @@ void freeStrands(pilar::HairState* h_state, pilar::HairState* d_state)
 
 	checkCudaErrors(cudaFree(h_state->rng));
 	checkCudaErrors(cudaFree(h_state->Head));
+	checkCudaErrors(cudaFree(h_state->model));
+	checkCudaErrors(cudaFree(h_state->grid));
+	checkCudaErrors(cudaFree(h_state->Head));
 
 	checkCudaErrors(cudaFree(d_state));
 }
 
 extern "C"
-void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, pilar::HairState* h_state)
+void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, float* grid, pilar::HairState* h_state)
 {
 	checkCudaErrors(cudaMemcpy(h_state->root, roots, h_state->numStrands * sizeof(*roots), cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(h_state->normal, normals, h_state->numStrands * sizeof(*normals), cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(h_state->grid, grid, DOMAIN_DIM * DOMAIN_DIM * DOMAIN_DIM * sizeof(float), cudaMemcpyHostToDevice));
 }
 
 extern "C"

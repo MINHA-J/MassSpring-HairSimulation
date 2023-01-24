@@ -388,28 +388,32 @@ namespace pilar
 		h_state->numModel = numModel;
 		h_state->grid = grid;
 
-		initDistanceField(h_state->model, h_state->grid);
+		initDistanceField(model, grid);
 
 		head = new Sphere;
 		head->pos = Vector3f(0.0f, 50.f, 60.f);
 		head->radius = 75.f;
 		h_state->Head = head;
-
 		d_state = 0;
 
-		//Get_state = h_state;
+		get_state = new pilar::HairState;
+		//pilar::Vector3f* root = new pilar::Vector3f[NUMSTRANDS];
+		//get_state->root = root;
+		get_state->root = roots;
+		get_state->normal = normals;
+		pilar::Vector3f* position = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		get_state->position = position;
+		pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		get_state->pos = pos;
+		pilar::Vector3f* velocity = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		get_state->velocity = velocity;
+		get_state->grid = grid;
 
 		//Allocate memory on GPU          
 		mallocStrands(h_state, d_state);
-		//checkCudaErrors(cudaMalloc((void**)&d_state, sizeof(pilar::HairState)));
 
 		//Copy root positions and normal directions to GPU
 		copyRoots(roots, normals, grid, h_state);
-
-		get_state = new HairState;
-		get_state->root = roots;
-		get_state->normal = normals;
-		get_state->grid = grid;
 
 		//Copy object model data to GPU
 		//copyModel(model, h_state);
@@ -486,6 +490,8 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 
 	root_hair.clear();
 	hairs = nullptr;
+
+	SplineComponent = CreateDefaultSubobject<USplineComponent>(TEXT("SplinePath"));
 }
 
 void UMyHairSim::load_meshes()
@@ -867,7 +873,6 @@ void UMyHairSim::InitHairModel()
 			root_hair[i].spawn_pt.z(),
 			root_hair[i].spawn_pt.y());
 		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Y, m_normal.Z);
-		//normals[i] = roots[i] - pilar::Vector3f(0, 60, 50);
 	}
 
 	//Gravity
@@ -878,6 +883,7 @@ void UMyHairSim::InitHairModel()
 	loadModel(model);
 	float* grid = new float[DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM];
 
+	// Initialise get_state 
 	hairs = new pilar::CUHair(NUMSTRANDS, NUMPARTICLES, NUMCOMPONENTS, 1, MASS,
 		K_EDGE, K_BEND, K_TWIST, K_EXTRA,
 		D_EDGE, D_BEND, D_TWIST, D_EXTRA,
@@ -888,33 +894,11 @@ void UMyHairSim::InitHairModel()
 		model,
 		grid);
 
-	// Initialise get_state 
-	pilar::Vector3f* root = new pilar::Vector3f[NUMSTRANDS];
-	hairs->get_state->root = root;
-	pilar::Vector3f* position = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
-	hairs->get_state->position = position;
-	pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
-	hairs->get_state->pos = pos;
-	pilar::Vector3f* velocity = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
-	hairs->get_state->velocity = velocity;
-	hairs->get_state->grid = grid; 
-
-	// ?
-	//UWorld* world = GetWorld();
-	//for (int i = 0; i < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM; i += 3)
-	//{
-	//	FVector vec1(hairs->get_state->grid[i], hairs->get_state->grid[i + 1], hairs->get_state->grid[i + 2]);
-	//	FVector vec2(hairs->get_state->grid[i + 3], hairs->get_state->grid[i + 4], hairs->get_state->grid[i + 5]);
-	//	DrawDebugLine(world, vec1, vec2, FColor::Silver, true, -1, 0, 0.7);
-	//}
-
 	//Initialise positions along normals on the gpu
-	hairs->initialise(position);
+	hairs->initialise(hairs->get_state->position);
 
 	UE_LOG(LogTemp, Warning, TEXT("DBG::InitHairModel - finish"));
-	delete[] roots;
-	delete[] normals;
-	delete[] grid;
+	
 }
 
 void UMyHairSim::DoOnceSimulation()
@@ -948,7 +932,81 @@ void UMyHairSim::DoOnceSimulation()
 			}
 		}
 	}
+	UpdateHairSpline();
 	UE_LOG(LogType, Warning, TEXT("DoOnceSimulation - Finish"));
+}
+
+void UMyHairSim::UpdateHairSpline()
+{
+	/****************************************
+	이전의 Spline 위치와 Mesh를 없애 할당을 하나로 함
+	*****************************************/
+	if (SplineHairs.Num() > 0)
+	{
+		for (int32 i = 0; i< SplineHairs.Num(); i++)
+		{
+			SplineHairs[i]->ClearSplinePoints(true);
+		}
+	}
+
+	if (SplineHairMeshes.Num() > 0)
+	{
+		for (int32 i = 0; i < SplineHairMeshes.Num(); i++)
+		{ 
+			if (SplineHairMeshes[i])
+				SplineHairMeshes[i]->DestroyComponent();
+		}
+	}
+	SplineHairs.Empty();
+	SplineHairMeshes.Empty();
+
+	for (int32 h = 0; h < hairs->h_state->numStrands; h++)
+	{
+		//USplineComponent* SplineComponent = NewObject<USplineComponent>(this, USplineComponent::StaticClass());
+		FVector root(hairs->get_state->root[h].x, hairs->get_state->root[h].z, hairs->get_state->root[h].y);
+		FVector first(
+			hairs->get_state->position[h * hairs->h_state->numParticles].x,
+			hairs->get_state->position[h * hairs->h_state->numParticles].z,
+			hairs->get_state->position[h * hairs->h_state->numParticles].y);
+		SplineComponent->AddSplinePointAtIndex(root, 0, ESplineCoordinateSpace::World);
+		//SplineComponent->AddSplinePointAtIndex(first, 1, ESplineCoordinateSpace::World);
+
+		for (int32 SplineCount = 0; SplineCount < hairs->h_state->numParticles; SplineCount++)
+		{
+			FVector vector(
+				hairs->get_state->position[h * hairs->h_state->numParticles + SplineCount].x,
+				hairs->get_state->position[h * hairs->h_state->numParticles + SplineCount].z,
+				hairs->get_state->position[h * hairs->h_state->numParticles + SplineCount].y);
+			SplineComponent->AddSplinePointAtIndex(vector, SplineCount + 1, ESplineCoordinateSpace::World);
+
+			USplineMeshComponent* HairSplineComponent = NewObject<USplineMeshComponent>(this, USplineMeshComponent::StaticClass());
+			HairSplineComponent->SetForwardAxis(ESplineMeshAxis::Z);
+			HairSplineComponent->SetStaticMesh(SplineMesh);			
+			// static move
+			HairSplineComponent->SetMobility(EComponentMobility::Movable);
+			HairSplineComponent->CreationMethod = EComponentCreationMethod::UserConstructionScript;
+			// Register
+			HairSplineComponent->RegisterComponentWithWorld(GetWorld());
+			// Spline Component에 따라 크기 위치를 변경함
+			HairSplineComponent->AttachToComponent(SplineComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			HairSplineComponent->SetStartScale(FVector2D(0.05f, 0.05f));
+			HairSplineComponent->SetEndScale(FVector2D(0.05f, 0.05f));
+			// 시작 지점
+			const FVector StartPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
+			const FVector StartTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
+			const FVector EndPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount+1, ESplineCoordinateSpace::Local);
+			const FVector EndTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount+1, ESplineCoordinateSpace::Local);
+
+			HairSplineComponent->SetStartAndEnd(StartPoint, StartTangent, EndPoint, EndTangent, true);
+			//HairSplineComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			if (DefaultMaterial)
+			{
+				HairSplineComponent->SetMaterial(0, DefaultMaterial);
+			}
+			SplineHairMeshes.Add(HairSplineComponent);
+		}
+		SplineHairs.Add(SplineComponent);
+	}
 }
 
 void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -966,10 +1024,6 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 			bIsInitMesh = false;
 		}
 
-		//checkCudaErrors(cudaMemcpy(hairs->h_state, hairs->d_state, sizeof(hairs->d_state), cudaMemcpyDeviceToHost));
-		//checkCudaErrors(cudaMemcpy(hairs->get_state->root, hairs->h_state->root, hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		//checkCudaErrors(cudaMemcpy(hairs->get_state->position, hairs->h_state->position, hairs->h_state->numParticles * hairs->h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-
 		pilar::Vector3f* position = hairs->get_state->position;
 		hairs->update(abs(DeltaTime) / 10.0f, position);
 		//hairs->collide(abs(DeltaTime) / 10.0f);
@@ -978,7 +1032,6 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 
 		for (int32 h = 0; h < hairs->h_state->numStrands; h++)
 		{
-			
 			hairs->get_state->root[h].x += m_move.x;
 			hairs->get_state->root[h].y += m_move.z;
 			hairs->get_state->root[h].z += m_move.y;
@@ -1032,6 +1085,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 			//UE_LOG(LogType, Error, TEXT("Update %f time, Hair %d"), abs(DeltaTime) / 10.0f, h);
 			m_after = pilar::Vector3f(GetComponentToWorld().GetLocation().X, GetComponentToWorld().GetLocation().Y, GetComponentToWorld().GetLocation().Z);
 		}
+		UpdateHairSpline();
 	}
 }
 

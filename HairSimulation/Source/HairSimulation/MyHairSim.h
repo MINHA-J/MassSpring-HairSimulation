@@ -5,9 +5,13 @@
 #include "kdtree.h"
 #include <vector>
 #include "CoreMinimal.h"
+
 #include "constants.h"
 #include "cu_hair.h"
 #include "cuda_runtime.h"
+
+#include "Components/SplineComponent.h"
+#include "Components/SplineMeshComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "MyHairSim.generated.h"
 
@@ -248,8 +252,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hair")
 		bool bIsInitMesh = true;
 	UPROPERTY(EditAnywhere, CallInEditor, Category = "Hair")
-		FVector m_normal = FVector(1.0f, 1.0f, 1.0f);
+		FVector m_normal = FVector(1.0f, 1.0f, 0.0f);
 	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline")
+		UStaticMesh* SplineMesh;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline")
+		class UMaterialInterface* DefaultMaterial;
+	UPROPERTY(VisibleAnyWhere, BlueprintReadWrite, Category = "Spline", meta= (AllowPrivateAccess = "true"))
+		class USplineComponent* SplineComponent;
+
+	TArray<USplineComponent*> SplineHairs;
+	TArray<USplineMeshComponent*> SplineHairMeshes;
 	//void OnRegister() override;
 	vector<Mesh*> m_objects;
 	Mesh* mesh_head;
@@ -267,9 +280,9 @@ public:
 	bool init_HairRoot(const Mesh* m, int num_spawns, float thresh = 0.4);
 	void loadModel(ModelOBJ* obj);
 	void InitHairModel();
+	void UpdateHairSpline();
 
 	void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
 	static Vector3f calc_rand_point(const Triangle& tr, Vector3f* bary);
 	static void get_spawn_triangles(const Mesh* m, float thresh, std::vector<Triangle>* faces);
 };
