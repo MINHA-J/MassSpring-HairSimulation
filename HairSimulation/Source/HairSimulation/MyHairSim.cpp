@@ -3,6 +3,7 @@
 // UE4 Headers
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
+#include "UObject/ConstructorHelpers.h"
 
 static bool check_tex_opaque(unsigned int tex);
 Mesh::Mesh()
@@ -491,6 +492,14 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 	root_hair.clear();
 	hairs = nullptr;
 
+	//SplineMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SplineStaticMesh"));
+	DefaultMaterial = CreateDefaultSubobject<UMaterial>(TEXT("SplineMaterial"));
+	static ConstructorHelpers::FObjectFinder<UMaterial> FoundMaterial(TEXT("Material'/Game/Geometry/Meshes/M_Bush_1.M_Bush_1'"));
+	if (FoundMaterial.Succeeded())
+	{
+		DefaultMaterial = FoundMaterial.Object;
+	}
+
 	SplineComponent = CreateDefaultSubobject<USplineComponent>(TEXT("SplinePath"));
 }
 
@@ -826,15 +835,16 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 		num++;
 	}
 
-	for (int i = 0; i < triangleIndex; i+= TOTAL_FLOATS_IN_TRIANGLE)
-	{
-		FVector vec1(obj->faces[i], obj->faces[i+1], obj->faces[i+2]);
-		FVector vec2(obj->faces[i+3], obj->faces[i + 4], obj->faces[i + 5]);
-		FVector vec3(obj->faces[i+6], obj->faces[i + 7], obj->faces[i + 8]);
-		DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.5);
-		DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.5);
-		DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.5);
-	}
+	// Draw 
+	//for (int i = 0; i < triangleIndex; i+= TOTAL_FLOATS_IN_TRIANGLE)
+	//{
+	//	FVector vec1(obj->faces[i], obj->faces[i+1], obj->faces[i+2]);
+	//	FVector vec2(obj->faces[i+3], obj->faces[i + 4], obj->faces[i + 5]);
+	//	FVector vec3(obj->faces[i+6], obj->faces[i + 7], obj->faces[i + 8]);
+	//	DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.5);
+	//	DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.5);
+	//	DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.5);
+	//}
 
 	UE_LOG(LogTemp, Warning, TEXT("DBG::index triangle: %d, normal: %d\n"), triangleIndex, normalIndex);
 }
@@ -978,9 +988,14 @@ void UMyHairSim::UpdateHairSpline()
 				hairs->get_state->position[h * hairs->h_state->numParticles + SplineCount].z,
 				hairs->get_state->position[h * hairs->h_state->numParticles + SplineCount].y);
 			SplineComponent->AddSplinePointAtIndex(vector, SplineCount + 1, ESplineCoordinateSpace::World);
-
+			FVector Tangent = SplineComponent->GetLocationAtSplinePoint(SplineCount+1, ESplineCoordinateSpace::Local) - SplineComponent->GetLocationAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
+			
 			USplineMeshComponent* HairSplineComponent = NewObject<USplineMeshComponent>(this, USplineMeshComponent::StaticClass());
 			HairSplineComponent->SetForwardAxis(ESplineMeshAxis::Z);
+			if (DefaultMaterial)
+			{
+				HairSplineComponent->SetMaterial(0, DefaultMaterial);
+			}
 			HairSplineComponent->SetStaticMesh(SplineMesh);			
 			// static move
 			HairSplineComponent->SetMobility(EComponentMobility::Movable);
@@ -989,20 +1004,21 @@ void UMyHairSim::UpdateHairSpline()
 			HairSplineComponent->RegisterComponentWithWorld(GetWorld());
 			// Spline Component에 따라 크기 위치를 변경함
 			HairSplineComponent->AttachToComponent(SplineComponent, FAttachmentTransformRules::KeepRelativeTransform);
-			HairSplineComponent->SetStartScale(FVector2D(0.05f, 0.05f));
-			HairSplineComponent->SetEndScale(FVector2D(0.05f, 0.05f));
+			//HairSplineComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+			//HairSplineComponent->SetStartScale(FVector2D(0.05f, 0.05f));
+			//HairSplineComponent->SetEndScale(FVector2D(0.05f, 0.05f));
+
 			// 시작 지점
 			const FVector StartPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
-			const FVector StartTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
-			const FVector EndPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount+1, ESplineCoordinateSpace::Local);
-			const FVector EndTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount+1, ESplineCoordinateSpace::Local);
-
+			const FVector StartTangent = Tangent;
+			//const FVector StartTangent = SplineComponent->GetTangentAtDistanceAlongSpline(SplineComponent->GetSplineLength(), ESplineCoordinateSpace::Local);
+			const FVector EndPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount + 1, ESplineCoordinateSpace::Local);
+			const FVector EndTangent = -1 * Tangent;
+			//const FVector EndTangent = SplineComponent->GetTangentAtDistanceAlongSpline(SplineComponent->GetSplineLength(), ESplineCoordinateSpace::Local);
+			//const FVector EndTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount + 1, ESplineCoordinateSpace::Local);
 			HairSplineComponent->SetStartAndEnd(StartPoint, StartTangent, EndPoint, EndTangent, true);
-			//HairSplineComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-			if (DefaultMaterial)
-			{
-				HairSplineComponent->SetMaterial(0, DefaultMaterial);
-			}
+			//HairSplineComponent->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
+			
 			SplineHairMeshes.Add(HairSplineComponent);
 		}
 		SplineHairs.Add(SplineComponent);

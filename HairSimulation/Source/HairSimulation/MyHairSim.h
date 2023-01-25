@@ -254,12 +254,12 @@ public:
 	UPROPERTY(EditAnywhere, CallInEditor, Category = "Hair")
 		FVector m_normal = FVector(1.0f, 1.0f, 0.0f);
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline")
 		UStaticMesh* SplineMesh;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spline")
 		class UMaterialInterface* DefaultMaterial;
 	UPROPERTY(VisibleAnyWhere, BlueprintReadWrite, Category = "Spline", meta= (AllowPrivateAccess = "true"))
-		class USplineComponent* SplineComponent;
+		USplineComponent* SplineComponent;
 
 	TArray<USplineComponent*> SplineHairs;
 	TArray<USplineMeshComponent*> SplineHairMeshes;
