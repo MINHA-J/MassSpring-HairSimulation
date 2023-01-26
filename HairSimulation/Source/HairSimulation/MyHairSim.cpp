@@ -330,13 +330,14 @@ namespace pilar
 		}
 
 		// Save Result
-		for (int i = 0; i < DOMAIN_DIM -1; i++)
-			for (int j = 0; j < DOMAIN_DIM-1; j++)
-				for (int k = 0; k < DOMAIN_DIM-1; k++)
+		for (int i = 0; i < DOMAIN_DIM; i++)
+			for (int j = 0; j < DOMAIN_DIM; j++)
+				for (int k = 0; k < DOMAIN_DIM; k++)
 				{
 					int indexgrid = (DOMAIN_DIM*DOMAIN_DIM*i) + (DOMAIN_DIM * j) + k;
 					if (indexgrid < DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM)
 					{
+						// ?
 						grid[indexgrid] = result[i][j][k];
 						//if (result[i][j][k] < FLT_MAX)
 						//	UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
@@ -882,7 +883,7 @@ void UMyHairSim::InitHairModel()
 			root_hair[i].spawn_pt.x(),
 			root_hair[i].spawn_pt.z(),
 			root_hair[i].spawn_pt.y());
-		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Y, m_normal.Z);
+		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Z, m_normal.Y);
 	}
 
 	//Gravity
@@ -1064,19 +1065,17 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				hairs->get_state->position[h * hairs->h_state->numParticles + par].x += m_move.x;
 				hairs->get_state->position[h * hairs->h_state->numParticles + par].y += m_move.z;
 				hairs->get_state->position[h * hairs->h_state->numParticles + par].z += m_move.y;
-				//hairs->get_state->position[h * hairs->h_state->numParticles + par].x += GetComponentLocation().X;
-				//hairs->get_state->position[h * hairs->h_state->numParticles + par].y += GetComponentLocation().Z;
-				//hairs->get_state->position[h * hairs->h_state->numParticles + par].z += GetComponentLocation().Y;
-				UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
-					h, par,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
-					h, par,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
+
+				//UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
+				//	h, par,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				//UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+				//	h, par,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
 
 				FVector vec1(
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
