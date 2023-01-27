@@ -23,6 +23,7 @@ typedef Eigen::Matrix4f Matrix4f;
 /**
  * 
  */
+
  //+------------------ Cuda Library ------------------+//
 extern "C"
 void mallocStrands(pilar::HairState* h_state, pilar::HairState* &d_state);
@@ -41,6 +42,7 @@ void copyRoots(pilar::Vector3f* roots, pilar::Vector3f* normals, float* grid, pi
 
 extern "C"
 void copyState(pilar::HairState* h_state, pilar::HairState* d_state);
+//+----------------------------------------------------+//
 
 struct FParticle
 {
@@ -229,10 +231,10 @@ public:
 		TArray<int32>* vtris;
 
 		// SM Buffer Ptrs
-		FPositionVertexBuffer* vb; // Position Vertex Buffer (Position)
-		FStaticMeshVertexBuffer* smvb; // Static Mesh Buffer (Static Mesh)
-		FColorVertexBuffer* cvb; // Color Vertex Buffer (Color)
-		FRawStaticIndexBuffer* ib; // Tri Index Buffer (Index)
+		FPositionVertexBuffer* vb = nullptr; // Position Vertex Buffer (Position)
+		FStaticMeshVertexBuffer* smvb = nullptr; // Static Mesh Buffer (Static Mesh)
+		FColorVertexBuffer* cvb = nullptr; // Color Vertex Buffer (Color)
+		FRawStaticIndexBuffer* ib = nullptr; // Tri Index Buffer (Index)
 
 		int32 vert_count, ind_count, adj_count, tri_count;
 		bool has_uv, has_col;
@@ -241,6 +243,9 @@ public:
 	// Mesh Properties
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 		UStaticMeshComponent* m_StaticMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+		UProceduralMeshComponent * m_ProcedureMesh;
+
 	UPROPERTY(EditAnywhere, Category = "Mesh")
 		bool bShowStaticMesh = true;
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Mesh")
@@ -266,7 +271,7 @@ public:
 	//void OnRegister() override;
 	vector<Mesh*> m_objects;
 	Mesh* mesh_head;
-	//ModelOBJ* m_model;
+	ModelOBJ* m_model;
 
 	vector<HairStrand> root_hair;
 	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);
@@ -277,8 +282,11 @@ public:
 
 	UMyHairSim(const FObjectInitializer& ObjectInitializer);
 
+	TArray<FVector> Model_vertices;
 	bool init_HairRoot(const Mesh* m, int num_spawns, float thresh = 0.4);
 	void loadModel(ModelOBJ* obj);
+	void UpdateModel(ModelOBJ* obj, pilar::Vector3f mov);
+
 	void InitHairModel();
 	void UpdateHairSpline();
 
