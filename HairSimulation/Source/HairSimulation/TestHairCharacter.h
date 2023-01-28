@@ -72,6 +72,9 @@ public:
 	// Sets default values for this character's properties
 	ATestHairCharacter();
 
+	// Called every frame
+	virtual void Tick(float DeltaTime) override;
+
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
 		float BaseTurnRate;
@@ -98,10 +101,10 @@ public:
 		TArray<int32>* vtris;
 
 		// SM Buffer Ptrs
-		FPositionVertexBuffer* vb = nullptr; // Position Vertex Buffer (Position)
+		FSkinWeightVertexBuffer* vb = nullptr; // Position Vertex Buffer (Position)
 		FStaticMeshVertexBuffer* smvb = nullptr; // Static Mesh Buffer (Static Mesh)
 		FColorVertexBuffer* cvb = nullptr; // Color Vertex Buffer (Color)
-		FRawStaticIndexBuffer* ib = nullptr; // Tri Index Buffer (Index)
+		FRawStaticIndexBuffer16or32Interface* ib = nullptr; // Tri Index Buffer (Index)
 
 		int32 vert_count, ind_count, adj_count, tri_count;
 		bool has_uv, has_col;
@@ -110,15 +113,23 @@ public:
 	//UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	//	UStaticMeshComponent* m_StaticMesh;
 
-	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Hair Mesh")
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Simulation")
 		void LoadMeshes(); // Save Skeletal Mesh Info
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
+		bool bStartSimulate = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
+		bool bIsInitMesh = true;
 
 	void InitHairModel(); // Init Hair root, Init CUHair
+	bool InitHairRoot(const MeshCustom* m, int num_spawns, float thresh = 0.4);
+
+	static Vector3f calc_rand_point(const Triangle& tr, Vector3f* bary);
+	static void get_spawn_triangles(const MeshCustom* m, float thresh, std::vector<Triangle>* faces);
+	float length_sq(const Vector3f& v);
 
 	vector<MeshCustom*> m_objects;
-	TArray<FVector> Model_vertices;
+	vector<HairStrand> HairRoots;
 
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	TArray<FVector> Model_vertices;
 
 };
