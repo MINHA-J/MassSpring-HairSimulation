@@ -94,7 +94,7 @@ struct Material
 	bool tex_opaque;
 };
 
-class Mesh
+class MeshCustom
 {
 private:
 	typedef Eigen::Vector3f Vector3f;
@@ -107,8 +107,8 @@ private:
 	unsigned int ibo;
 
 public:
-	Mesh();
-	~Mesh();
+	MeshCustom();
+	~MeshCustom();
 
 	Aabb* bbox; //? Attach*
 	Material* mtl;
@@ -269,8 +269,8 @@ public:
 	TArray<USplineComponent*> SplineHairs;
 	TArray<USplineMeshComponent*> SplineHairMeshes;
 	//void OnRegister() override;
-	vector<Mesh*> m_objects;
-	Mesh* mesh_head;
+	vector<MeshCustom*> m_objects;
+	MeshCustom* mesh_head;
 	ModelOBJ* m_model;
 
 	vector<HairStrand> root_hair;
@@ -283,7 +283,7 @@ public:
 	UMyHairSim(const FObjectInitializer& ObjectInitializer);
 
 	TArray<FVector> Model_vertices;
-	bool init_HairRoot(const Mesh* m, int num_spawns, float thresh = 0.4);
+	bool init_HairRoot(const MeshCustom* m, int num_spawns, float thresh = 0.4);
 	void loadModel(ModelOBJ* obj);
 	void UpdateModel(ModelOBJ* obj, pilar::Vector3f mov);
 
@@ -292,5 +292,5 @@ public:
 
 	void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	static Vector3f calc_rand_point(const Triangle& tr, Vector3f* bary);
-	static void get_spawn_triangles(const Mesh* m, float thresh, std::vector<Triangle>* faces);
+	static void get_spawn_triangles(const MeshCustom* m, float thresh, std::vector<Triangle>* faces);
 };

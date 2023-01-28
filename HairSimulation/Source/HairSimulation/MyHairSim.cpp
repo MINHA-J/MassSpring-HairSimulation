@@ -6,7 +6,7 @@
 #include "UObject/ConstructorHelpers.h"
 
 static bool check_tex_opaque(unsigned int tex);
-Mesh::Mesh()
+MeshCustom::MeshCustom()
 {
 	vbo_vertices = 0;
 	vbo_normals = 0;
@@ -22,12 +22,12 @@ Mesh::Mesh()
 	//mtl->shininess = 50;
 }
 
-Mesh::~Mesh()
+MeshCustom::~MeshCustom()
 {
 	delete bbox;
 }
 
-void Mesh::calc_bbox()
+void MeshCustom::calc_bbox()
 {
 	if (vertices.empty()) {
 		bbox->v0 = Vector3f(0, 0, 0);
@@ -506,7 +506,7 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 void UMyHairSim::load_meshes()
 {
 	m_objects.clear();
-	Mesh* mesh = new Mesh();
+	MeshCustom* mesh = new MeshCustom();
 
 	UStaticMesh* usm = m_StaticMesh->GetStaticMesh();
 	if (m_StaticMesh == nullptr) { UE_LOG(LogTemp, Error, TEXT("ERR::HeadMesh::No Static Mesh Set")); }
@@ -632,7 +632,7 @@ Vector3f UMyHairSim::calc_rand_point(const Triangle& tr, Vector3f* bary)
 	return rp;
 }
 
-void UMyHairSim::get_spawn_triangles(const Mesh* m, float thresh, std::vector<Triangle>* faces)
+void UMyHairSim::get_spawn_triangles(const MeshCustom* m, float thresh, std::vector<Triangle>* faces)
 {
 	if (m == NULL) { UE_LOG(LogTemp, Error, TEXT("Invalid mesh.")); return; };
 
@@ -675,7 +675,7 @@ float length_sq(const Vector3f& v)
 {
 	return v.x() * v.x() + v.y() * v.y() + v.z() * v.z();
 }
-bool UMyHairSim::init_HairRoot(const Mesh* m, int num_spawns, float thresh)
+bool UMyHairSim::init_HairRoot(const MeshCustom* m, int num_spawns, float thresh)
 {
 	std::vector<Triangle> faces;
 	kdtree* kd = kd_create(3);
