@@ -148,7 +148,7 @@ struct Triangle
 
 namespace pilar
 {
-	void initDistanceField(ModelOBJ *obj, float* grid);
+	void initDistanceField(ModelOBJ *obj, float* grid, HairState* state);
 
 	class CUHair
 	{
@@ -178,6 +178,11 @@ namespace pilar
 			float length_e,
 			float length_b,
 			float length_t,
+			int domain_dim,
+			float domain_width,
+			float domain_half,
+			float cell_width,
+			float cell_half,
 			Vector3f gravity,
 			Vector3f* roots,
 			Vector3f* normals,

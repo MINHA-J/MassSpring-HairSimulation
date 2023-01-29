@@ -71,6 +71,13 @@ namespace pilar
 		float length_b;
 		float length_t;
 
+		//Geometry collisions constants
+		int domain_dim;
+		float domain_width;
+		float domain_half;
+		float cell_width;
+		float cell_half;
+
 		Sphere* Head;
 		ModelOBJ* model;
 		int numModel;

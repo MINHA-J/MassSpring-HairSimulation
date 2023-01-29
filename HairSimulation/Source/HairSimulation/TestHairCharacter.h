@@ -115,6 +115,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Simulation")
 		void LoadMeshes(); // Save Skeletal Mesh Info
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Simulation")
+		void DoOnceSimulation();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
 		bool bStartSimulate = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
@@ -127,9 +129,20 @@ public:
 	static void get_spawn_triangles(const MeshCustom* m, float thresh, std::vector<Triangle>* faces);
 	float length_sq(const Vector3f& v);
 
+	void LoadModel(ModelOBJ* obj);
+
 	vector<MeshCustom*> m_objects;
 	vector<HairStrand> HairRoots;
-
 	TArray<FVector> Model_vertices;
 
+	ModelOBJ* m_model;
+	pilar::CUHair* m_hairs;
+
+	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_after = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_move = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+
+	pilar::Vector3f m_MeshBefore = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_Meshafter = pilar::Vector3f(0.0f, 0.0f, 0.0f);
+	pilar::Vector3f m_Meshmove = pilar::Vector3f(0.0f, 0.0f, 0.0f);
 };

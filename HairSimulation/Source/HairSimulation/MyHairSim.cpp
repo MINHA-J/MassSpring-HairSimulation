@@ -53,7 +53,7 @@ void MeshCustom::calc_bbox()
 
 namespace pilar
 {
-	void initDistanceField(ModelOBJ *obj, float* grid)
+	void initDistanceField(ModelOBJ *obj, float* grid, HairState* state)
 	{
 		float result[DOMAIN_DIM][DOMAIN_DIM][DOMAIN_DIM];
 
@@ -65,7 +65,7 @@ namespace pilar
 
 		//calculate triangle normal scaling factor
 		float delta = 0.25f;
-		float echo = CELL_WIDTH * delta;
+		float echo = state->cell_width * delta;
 
 		int numVertices = obj->totalConnectedPoints / POINTS_PER_VERTEX;
 		int numTriangles = obj->totalConnectedTriangles / TOTAL_FLOATS_IN_TRIANGLE;
@@ -123,14 +123,14 @@ namespace pilar
 			}
 
 			//normalise to the grid
-			aabb[0][0] = (aabb[0][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[0][0] = (aabb[0][0] + state->domain_half - state->cell_half) / state->cell_width;
 			//aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
-			aabb[0][1] = (aabb[0][1] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
-			aabb[0][2] = (aabb[0][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
-			aabb[1][0] = (aabb[1][0] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[0][1] = (aabb[0][1] + state->domain_half - state->cell_half) / state->cell_width;
+			aabb[0][2] = (aabb[0][2] + state->domain_half - state->cell_half) / state->cell_width;
+			aabb[1][0] = (aabb[1][0] + state->domain_half - state->cell_half) / state->cell_width;
 			//aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
-			aabb[1][1] = (aabb[1][1] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
-			aabb[1][2] = (aabb[1][2] + DOMAIN_HALF - CELL_HALF) / CELL_WIDTH;
+			aabb[1][1] = (aabb[1][1] + state->domain_half - state->cell_half) / state->cell_width;
+			aabb[1][2] = (aabb[1][2] + state->domain_half - state->cell_half) / state->cell_width;
 
 			//round aabb
 			aabb[0][0] = floor(aabb[0][0]);
@@ -179,10 +179,10 @@ namespace pilar
 					for (int zz = iaabb[0][2]; zz <= iaabb[1][2]; zz++)
 					{
 						//Denormalise from grid to centre of cell
-						float xpos = xx * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
+						float xpos = xx * state->cell_width - state->domain_half + state->cell_half;
 						// float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
-						float ypos = yy * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
-						float zpos = zz * CELL_WIDTH - DOMAIN_HALF + CELL_HALF;
+						float ypos = yy * state->cell_width - state->domain_half + state->cell_half;
+						float zpos = zz * state->cell_width - state->domain_half + state->cell_half;
 
 						//dot product between gridpoint and triangle normal
 						float dvalue = (xpos - triangle[0][0]) * normal[0] + (ypos - triangle[0][1]) * normal[1] + (zpos - triangle[0][2]) * normal[2];
@@ -361,6 +361,11 @@ namespace pilar
 		float length_e,
 		float length_b,
 		float length_t,
+		int domain_dim,
+		float domain_width,
+		float domain_half,
+		float cell_width,
+		float cell_half,
 		Vector3f gravity,
 		Vector3f* roots,
 		Vector3f* normals,
@@ -386,11 +391,16 @@ namespace pilar
 		h_state->length_e = length_e;
 		h_state->length_b = length_b;
 		h_state->length_t = length_t;
+		h_state->domain_dim = domain_dim;
+		h_state->domain_width = domain_width;
+		h_state->domain_half = domain_half;
+		h_state->cell_width = cell_width;
+		h_state->cell_half = cell_half;
 		h_state->model = model;
 		h_state->numModel = numModel;
 		h_state->grid = grid;
 
-		initDistanceField(model, grid);
+		initDistanceField(model, grid, h_state);
 
 		head = new Sphere;
 		head->pos = Vector3f(0.0f, 50.f, 60.f);
@@ -449,7 +459,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->grid, h_state->grid, DOMAIN_DIM * DOMAIN_DIM * DOMAIN_DIM * sizeof(float), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->grid, h_state->grid, h_state->domain_dim * h_state->domain_dim * h_state->domain_dim * sizeof(float), cudaMemcpyDeviceToHost));
 	}
 
 	void CUHair::update(float dt, Vector3f* position)
@@ -459,7 +469,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(h_state->pos, get_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->position, position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
 		checkCudaErrors(cudaMemcpy(h_state->velocity, get_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyHostToDevice));
-		checkCudaErrors(cudaMemcpy(h_state->grid, get_state->grid, DOMAIN_DIM * DOMAIN_DIM * DOMAIN_DIM * sizeof(float), cudaMemcpyHostToDevice));
+		checkCudaErrors(cudaMemcpy(h_state->grid, get_state->grid, h_state->domain_dim * h_state->domain_dim * h_state->domain_dim * sizeof(float), cudaMemcpyHostToDevice));
 
 		updateStrands(dt, h_state, d_state);
 
@@ -468,7 +478,7 @@ namespace pilar
 		checkCudaErrors(cudaMemcpy(get_state->position, h_state->position, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->pos, h_state->pos, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
 		checkCudaErrors(cudaMemcpy(get_state->velocity, h_state->velocity, h_state->numParticles * h_state->numStrands * sizeof(pilar::Vector3f), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy(get_state->grid, h_state->grid, DOMAIN_DIM * DOMAIN_DIM * DOMAIN_DIM * sizeof(float), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy(get_state->grid, h_state->grid, h_state->domain_dim * h_state->domain_dim * h_state->domain_dim * sizeof(float), cudaMemcpyDeviceToHost));
 	}
 }
 
@@ -987,6 +997,7 @@ void UMyHairSim::InitHairModel()
 		K_EDGE, K_BEND, K_TWIST, K_EXTRA,
 		D_EDGE, D_BEND, D_TWIST, D_EXTRA,
 		LENGTH_EDGE, LENGTH_BEND, LENGTH_TWIST,
+		DOMAIN_DIM, DOMAIN_WIDTH, DOMAIN_HALF, CELL_WIDTH, CELL_HALF,
 		gravity,
 		roots,
 		normals,
@@ -1136,7 +1147,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 		if (m_move.length() > 0)
 		{
 			UpdateModel(m_model, m_move);
-			pilar::initDistanceField(m_model, hairs->get_state->grid);
+			pilar::initDistanceField(m_model, hairs->get_state->grid, hairs->get_state);
 		}
 
 		//---Update Hair
