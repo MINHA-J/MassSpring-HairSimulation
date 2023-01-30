@@ -409,17 +409,36 @@ namespace pilar
 		d_state = 0;
 
 		get_state = new pilar::HairState;
-		//pilar::Vector3f* root = new pilar::Vector3f[NUMSTRANDS];
-		//get_state->root = root;
 		get_state->root = roots;
 		get_state->normal = normals;
-		pilar::Vector3f* position = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		pilar::Vector3f* position = new pilar::Vector3f[numStrands*numParticles];
 		get_state->position = position;
-		pilar::Vector3f* pos = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		pilar::Vector3f* pos = new pilar::Vector3f[numStrands*numParticles];
 		get_state->pos = pos;
-		pilar::Vector3f* velocity = new pilar::Vector3f[NUMSTRANDS*NUMPARTICLES];
+		pilar::Vector3f* velocity = new pilar::Vector3f[numStrands*numParticles];
 		get_state->velocity = velocity;
 		get_state->grid = grid;
+		get_state->numStrands = numStrands;
+		get_state->numParticles = numParticles;
+		get_state->numComponents = numComponents;
+		get_state->gravity = gravity;
+		get_state->mass = mass;
+		get_state->k_edge = k_edge;
+		get_state->k_bend = k_bend;
+		get_state->k_twist = k_twist;
+		get_state->k_extra = k_extra;
+		get_state->d_edge = d_edge;
+		get_state->d_bend = d_bend;
+		get_state->d_twist = d_twist;
+		get_state->d_extra = d_extra;
+		get_state->length_e = length_e;
+		get_state->length_b = length_b;
+		get_state->length_t = length_t;
+		get_state->domain_dim = domain_dim;
+		get_state->domain_width = domain_width;
+		get_state->domain_half = domain_half;
+		get_state->cell_width = cell_width;
+		get_state->cell_half = cell_half;
 
 		//Allocate memory on GPU          
 		mallocStrands(h_state, d_state);
@@ -489,8 +508,9 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 	bTickInEditor = true;
 
 	m_StaticMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MyStaticMesh"));
-	m_ProcedureMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("MyProcedureMesh"));
-	m_ProcedureMesh->AttachTo(this);
+	m_StaticMesh->AttachTo(this);
+	//m_ProcedureMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("MyProcedureMesh"));
+	//m_ProcedureMesh->AttachTo(this);
 
 	bShowStaticMesh = true;
 	hair_length = 1.f;
@@ -551,7 +571,7 @@ void UMyHairSim::load_meshes()
 	Particles.AddDefaulted(particleCount);
 
 	// Need to add checks to delete previous procedual mesh data if exists.
-	ClearAllMeshSections();
+	//ClearAllMeshSections();
 
 	smData.has_uv = smData.smvb->GetNumTexCoords() != 0;
 	smData.has_col = lod0->bHasColorVertexData;
@@ -608,9 +628,9 @@ void UMyHairSim::load_meshes()
 	}
 
 	//Build Mesh Section
-	m_ProcedureMesh->CreateMeshSection(0, smData.Pos, smData.Ind, smData.Normal, smData.UV, smData.Col, smData.Tang, false);
-	bShowStaticMesh = false;
-	m_StaticMesh->SetVisibility(bShowStaticMesh);
+	//m_ProcedureMesh->CreateMeshSection(0, smData.Pos, smData.Ind, smData.Normal, smData.UV, smData.Col, smData.Tang, false);
+	//bShowStaticMesh = false;
+	//m_StaticMesh->SetVisibility(bShowStaticMesh);
 	//StateExists = true;
 
 	// Build Tri Array and Per Vert Shared Tri Array
@@ -807,6 +827,14 @@ void UMyHairSim::loadModel(ModelOBJ* obj)
 		float coord2[3] = { obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5] };
 		float coord3[3] = { obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8] };
 
+		// Debug
+		//FVector vec1(obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2]);
+		//FVector vec2(obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5]);
+		//FVector vec3(obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8]);
+		//DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.5);
+		//DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.5);
+		//DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.5);
+
 		/* calculate Vector1 and Vector2 */
 		float va[3], vb[3], vr[3], val;
 
@@ -880,6 +908,7 @@ void UMyHairSim::UpdateModel(ModelOBJ* obj, pilar::Vector3f mov)
 		//obj->vertices[obj->totalConnectedPoints + 1] = m_ProcedureMesh->GetProcMeshSection(0)->ProcVertexBuffer[i].Position.Z;
 		//obj->vertices[obj->totalConnectedPoints + 2] = m_ProcedureMesh->GetProcMeshSection(0)->ProcVertexBuffer[i].Position.Y;
 
+		//-- For Debug Model
 		//FVector v(m_ProcedureMesh->GetProcMeshSection(0)->ProcVertexBuffer[i].Position.X, 
 		//	m_ProcedureMesh->GetProcMeshSection(0)->ProcVertexBuffer[i].Position.Y,
 		//	m_ProcedureMesh->GetProcMeshSection(0)->ProcVertexBuffer[i].Position.Z);
@@ -963,16 +992,18 @@ void UMyHairSim::InitHairModel()
 
 	//	coll_sphere.radius = 1.0;
 	//	coll_sphere.center = Vec3(0, 0.6, 0.53);
+	//int numStrands = NUMSTRANDS;
+	int numStrands = 10;
 
-	if (!init_HairRoot(mesh_head, NUMSTRANDS, THRESH))
+	if (!init_HairRoot(mesh_head, numStrands, THRESH))
 	{
 		UE_LOG(LogTemp, Error, TEXT("ERR::HairMesh::Failed to initialize hair"));
 		return;
 	}
 
 	// Root positions, Normal directions, Gravity
-	pilar::Vector3f* roots = new pilar::Vector3f[NUMSTRANDS];
-	pilar::Vector3f* normals = new pilar::Vector3f[NUMSTRANDS];
+	pilar::Vector3f* roots = new pilar::Vector3f[numStrands];
+	pilar::Vector3f* normals = new pilar::Vector3f[numStrands];
 	for (int32 i = 0; i < root_hair.size(); ++i)
 	{
 		roots[i] = pilar::Vector3f(
@@ -993,7 +1024,7 @@ void UMyHairSim::InitHairModel()
 	float* grid = new float[DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM];
 
 	// Initialise get_state 
-	hairs = new pilar::CUHair(NUMSTRANDS, NUMPARTICLES, NUMCOMPONENTS, 1, MASS,
+	hairs = new pilar::CUHair(numStrands, NUMPARTICLES, NUMCOMPONENTS, 1, MASS,
 		K_EDGE, K_BEND, K_TWIST, K_EXTRA,
 		D_EDGE, D_BEND, D_TWIST, D_EXTRA,
 		LENGTH_EDGE, LENGTH_BEND, LENGTH_TWIST,
@@ -1175,23 +1206,23 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				hairs->get_state->position[h * hairs->h_state->numParticles + par].z += m_move.y;
 
 				//--- For Debug Particle position & velocity
-				//UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
-				//	h, par,
-				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
-				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				//UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
-				//	h, par,
-				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
-				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
-				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
+				UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
+					h, par,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+					h, par,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
+					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
 
 				//--- For visualize
 				FVector vec1(
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
 					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				//DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.1f);
+				DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.1f);
 
 				if (par + 1 < hairs->h_state->numParticles)
 				{

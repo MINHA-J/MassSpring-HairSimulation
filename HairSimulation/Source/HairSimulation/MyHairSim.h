@@ -12,6 +12,7 @@
 
 #include "Components/SplineComponent.h"
 #include "Components/SplineMeshComponent.h"
+#include "Components/MeshComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "MyHairSim.generated.h"
 
@@ -201,7 +202,7 @@ namespace pilar
 #define THRESH 0.5
 
 UCLASS()
-class HAIRSIMULATION_API UMyHairSim : public UProceduralMeshComponent
+class HAIRSIMULATION_API UMyHairSim : public UMeshComponent
 {
 	GENERATED_BODY()
 	
@@ -248,8 +249,8 @@ public:
 	// Mesh Properties
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 		UStaticMeshComponent* m_StaticMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
-		UProceduralMeshComponent * m_ProcedureMesh;
+	//UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+	//	UProceduralMeshComponent * m_ProcedureMesh;
 
 	UPROPERTY(EditAnywhere, Category = "Mesh")
 		bool bShowStaticMesh = true;

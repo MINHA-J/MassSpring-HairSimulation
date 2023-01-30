@@ -102,6 +102,7 @@ public:
 
 		// SM Buffer Ptrs
 		FSkinWeightVertexBuffer* vb = nullptr; // Position Vertex Buffer (Position)
+		//FPositionVertexBuffer* vb = nullptr;
 		FStaticMeshVertexBuffer* smvb = nullptr; // Static Mesh Buffer (Static Mesh)
 		FColorVertexBuffer* cvb = nullptr; // Color Vertex Buffer (Color)
 		FRawStaticIndexBuffer16or32Interface* ib = nullptr; // Tri Index Buffer (Index)

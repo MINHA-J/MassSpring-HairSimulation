@@ -2,10 +2,10 @@
 #define __CONSTANTS_H__
 
 #define NUMSTRANDS			10
-#define NUMPARTICLES		20 //Needs to be multiples of 5???
+#define NUMPARTICLES		20 // 이거 수정시 cu도
 #define NUMCOMPONENTS		3 // 3D vectors
 #define NUMSEGMENTS			(NUMPARTICLES-1)
-#define MASS				NUMSTRANDS * 0.01f // ~ 0.000000001f particle mass is 0.01mg, total strand weight is 1mg
+#define MASS				NUMSTRANDS * 0.02f // ~ 0.000000001f particle mass is 0.01mg, total strand weight is 1mg
 #define K_EDGE				6400.0f // ~ (stable value) 10000000.0f
 #define K_BEND				160.0f // ~ 8.0f
 #define K_TWIST				160.0f // ~ 8.0f
