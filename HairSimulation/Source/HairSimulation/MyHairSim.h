@@ -278,6 +278,7 @@ public:
 	vector<MeshCustom*> m_objects;
 	MeshCustom* mesh_head;
 	ModelOBJ* m_model;
+	ModelOBJ* m_hand;
 
 	vector<HairStrand> root_hair;
 	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);

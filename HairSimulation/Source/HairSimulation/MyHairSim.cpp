@@ -509,6 +509,16 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 
 	m_StaticMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MyStaticMesh"));
 	m_StaticMesh->AttachTo(this);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundObject(TEXT("StaticMesh'/Game/Geometry/Meshes/TotalModel1.TotalModel1'"));
+	if (FoundObject.Succeeded())
+	{
+		m_StaticMesh->SetStaticMesh(FoundObject.Object);
+	}
+	
+	//if (FoundMaterial.Succeeded())
+	//{
+	//	DefaultMaterial = FoundMaterial.Object;
+	//}
 	//m_ProcedureMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("MyProcedureMesh"));
 	//m_ProcedureMesh->AttachTo(this);
 
@@ -524,13 +534,18 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 
 	//SplineMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SplineStaticMesh"));
 	//DefaultMaterial = CreateDefaultSubobject<UMaterial>(TEXT("SplineMaterial"));
-	//static ConstructorHelpers::FObjectFinder<UMaterial> FoundMaterial(TEXT("Material'/Game/Geometry/Meshes/M_Bush_1.M_Bush_1'"));
-	//if (FoundMaterial.Succeeded())
-	//{
-	//	DefaultMaterial = FoundMaterial.Object;
-	//}
-
 	SplineComponent = CreateDefaultSubobject<USplineComponent>(TEXT("SplinePath"));
+	static ConstructorHelpers::FObjectFinder<UMaterial> FoundMaterial(TEXT("Material'/Game/StarterContent/Materials/M_Wood_Walnut.M_Wood_Walnut'"));
+	if (FoundMaterial.Succeeded())
+	{
+		DefaultMaterial = FoundMaterial.Object;
+	}
+	//static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundSpline(TEXT("StaticMesh'/Game/Geometry/Meshes/HairPiece1.HairPiece1'"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundSpline(TEXT("StaticMesh'/Game/Geometry/Meshes/Braid_Plane_001.Braid_Plane_001'"));
+	if (FoundSpline.Succeeded())
+	{
+		SplineMesh = FoundSpline.Object;
+	}
 }
 
 void UMyHairSim::load_meshes()
@@ -756,12 +771,12 @@ bool UMyHairSim::init_HairRoot(const MeshCustom* m, int num_spawns, float thresh
 
 		UWorld* world = GetWorld();
 		//DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
-		UE_LOG(LogType, Warning, TEXT("DBG::init_HairRoot - Show Hair: %d"), root_hair.size());
-		for (int32 i = 0; i < root_hair.size() - 1; ++i)
-		{
-			FVector vec(root_hair[i].spawn_pt.x(), root_hair[i].spawn_pt.y(), root_hair[i].spawn_pt.z());
-			DrawDebugPoint(world, vec, 9.f, FColor(255, 0, 255), true, 5.f);
-		}
+		//UE_LOG(LogType, Warning, TEXT("DBG::init_HairRoot - Show Hair: %d"), root_hair.size());
+		//for (int32 i = 0; i < root_hair.size() - 1; ++i)
+		//{
+		//	FVector vec(root_hair[i].spawn_pt.x(), root_hair[i].spawn_pt.y(), root_hair[i].spawn_pt.z());
+		//	DrawDebugPoint(world, vec, 9.f, FColor(255, 0, 255), true, 5.f);
+		//}
 	}
 	return true;
 }
@@ -925,7 +940,7 @@ void UMyHairSim::UpdateModel(ModelOBJ* obj, pilar::Vector3f mov)
 		int tCounter = 0;
 		for (int j = 0; j < POINTS_PER_VERTEX; j++)
 		{
-			DrawDebugPoint(world, Model_vertices[vertexNumber[j]], 2, FColor(52, 220, 239), false, 0.01f);
+			//DrawDebugPoint(world, Model_vertices[vertexNumber[j]], 2, FColor(52, 220, 239), false, 0.01f);
 			obj->faces[triangleIndex + tCounter] = Model_vertices[vertexNumber[j]].X;
 			obj->faces[triangleIndex + tCounter + 1] = Model_vertices[vertexNumber[j]].Z;
 			obj->faces[triangleIndex + tCounter + 2] = Model_vertices[vertexNumber[j]].Y;
@@ -993,7 +1008,7 @@ void UMyHairSim::InitHairModel()
 	//	coll_sphere.radius = 1.0;
 	//	coll_sphere.center = Vec3(0, 0.6, 0.53);
 	//int numStrands = NUMSTRANDS;
-	int numStrands = 10;
+	int numStrands = 50;
 
 	if (!init_HairRoot(mesh_head, numStrands, THRESH))
 	{
@@ -1060,7 +1075,7 @@ void UMyHairSim::DoOnceSimulation()
 				pos[h * hairs->h_state->numParticles + par].x,
 				pos[h * hairs->h_state->numParticles + par].z,
 				pos[h * hairs->h_state->numParticles + par].y);
-			DrawDebugPoint(world, vec1, 5.f, FColor(255, 255, 0), true);
+			//DrawDebugPoint(world, vec1, 5.f, FColor(255, 255, 0), true);
 
 			if (par + 1 < hairs->h_state->numParticles)
 			{
@@ -1069,7 +1084,7 @@ void UMyHairSim::DoOnceSimulation()
 					pos[h * hairs->h_state->numParticles + par + 1].z,
 					pos[h * hairs->h_state->numParticles + par + 1].y);
 
-				DrawDebugLine(world, vec1, vec2, FColor::Emerald, true, -1, 0, 2.f);
+				//DrawDebugLine(world, vec1, vec2, FColor::Emerald, true, -1, 0, 2.f);
 			}
 		}
 	}
@@ -1197,7 +1212,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				hairs->get_state->position[h * hairs->h_state->numParticles].x + m_move.x,
 				hairs->get_state->position[h * hairs->h_state->numParticles].z + m_move.y,
 				hairs->get_state->position[h * hairs->h_state->numParticles].y + m_move.z);
-			DrawDebugLine(world, root, first, FColor::Emerald, false, -1, 0, 0.8f);
+			//DrawDebugLine(world, root, first, FColor::Emerald, false, -1, 0, 0.8f);
 
 			for (int32 par = 0; par < hairs->h_state->numParticles; par++)
 			{
@@ -1206,23 +1221,23 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 				hairs->get_state->position[h * hairs->h_state->numParticles + par].z += m_move.y;
 
 				//--- For Debug Particle position & velocity
-				UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
-					h, par,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
-					h, par,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
+				//UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
+				//	h, par,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				//UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+				//	h, par,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].x,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].z,
+				//	hairs->get_state->velocity[h * hairs->h_state->numParticles + par].y);
 
 				//--- For visualize
-				FVector vec1(
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
-					hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
-				DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.1f);
+				//FVector vec1(
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].x,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].z,
+				//	hairs->get_state->position[h * hairs->h_state->numParticles + par].y);
+				//DrawDebugPoint(world, vec1, 4.f, FColor::Green, false, 0.1f);
 
 				if (par + 1 < hairs->h_state->numParticles)
 				{
@@ -1232,7 +1247,7 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 						hairs->get_state->position[h * hairs->h_state->numParticles + par + 1].y + m_move.z);
 
 					//--- For visualize
-					DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
+					//DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
 				}
 			}
 			//UE_LOG(LogType, Error, TEXT("Update %f time, Hair %d"), abs(DeltaTime) / 10.0f, h);

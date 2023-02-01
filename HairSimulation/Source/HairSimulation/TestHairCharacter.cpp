@@ -62,6 +62,8 @@ ATestHairCharacter::ATestHairCharacter()
 
 	m_model = nullptr;
 	m_hairs = nullptr;
+
+	SplineComponent = CreateDefaultSubobject<USplineComponent>(TEXT("SplinePath"));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -80,10 +82,10 @@ void ATestHairCharacter::SetupPlayerInputComponent(class UInputComponent* Player
 	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
 	// "turn" handles devices that provide an absolute delta, such as a mouse.
 	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-	PlayerInputComponent->BindAxis("TurnRate", this, &ATestHairCharacter::TurnAtRate);
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
-	PlayerInputComponent->BindAxis("LookUpRate", this, &ATestHairCharacter::LookUpAtRate);
+	//PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
+	//PlayerInputComponent->BindAxis("TurnRate", this, &ATestHairCharacter::TurnAtRate);
+	//PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+	//PlayerInputComponent->BindAxis("LookUpRate", this, &ATestHairCharacter::LookUpAtRate);
 
 	// handle touch devices
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &ATestHairCharacter::TouchStarted);
@@ -194,6 +196,11 @@ void ATestHairCharacter::LoadMeshes()
 				SMLodRender, 
 				*smData.vb) 
 				+ GetActorLocation() + SMComponent->GetRelativeLocation();
+
+			//VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 1 ,0));
+			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1)); 
+			//VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(1, 0, 0));
+
 			//FVector VertexPosition = SMLodRender.StaticVertexBuffers.PositionVertexBuffer.VertexPosition(i) + GetActorLocation() + FVector(0, 0, -97);
 
 			Model_vertices.Add(VertexPosition);
@@ -354,13 +361,14 @@ bool ATestHairCharacter::InitHairRoot(const MeshCustom* m, int num_spawns, float
 		}
 
 		UWorld* world = GetWorld();
+		//-- Visualize Hair Root
 		//DrawDebugSphere(world, FVector(0, 50, 60), 75, 26, FColor::Blue, true, -1, 0, 1);
 		UE_LOG(LogType, Warning, TEXT("DBG::init_HairRoot - Show Hair: %d"), HairRoots.size());
-		for (int32 i = 0; i < HairRoots.size() - 1; ++i)
-		{
-			FVector vec(HairRoots[i].spawn_pt.x(), HairRoots[i].spawn_pt.y(), HairRoots[i].spawn_pt.z());
-			DrawDebugPoint(world, vec, 9.f, FColor(255, 0, 255), true, 5.f);
-		}
+		//for (int32 i = 0; i < HairRoots.size() - 1; ++i)
+		//{
+		//	FVector vec(HairRoots[i].spawn_pt.x(), HairRoots[i].spawn_pt.y(), HairRoots[i].spawn_pt.z());
+		//	DrawDebugPoint(world, vec, 9.f, FColor(255, 0, 255), true, 5.f);
+		//}
 	}
 	return true;
 }
@@ -415,9 +423,9 @@ void ATestHairCharacter::LoadModel(ModelOBJ* obj)
 		FVector vec1(obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2]);
 		FVector vec2(obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5]);
 		FVector vec3(obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8]);
-		DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.1);
-		DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.1);
-		DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.1);
+		//DrawDebugLine(world, vec1, vec2, FColor::Blue, true, -1, 0, 0.1);
+		//DrawDebugLine(world, vec2, vec3, FColor::Blue, true, -1, 0, 0.1);
+		//DrawDebugLine(world, vec3, vec1, FColor::Blue, true, -1, 0, 0.1);
 
 		/* calculate Vector1 and Vector2 */
 		float va[3], vb[3], vr[3], val;
@@ -462,6 +470,106 @@ void ATestHairCharacter::LoadModel(ModelOBJ* obj)
 	}
 }
 
+void ATestHairCharacter::UpdateModel(ModelOBJ* obj, pilar::Vector3f mov)
+{
+	int triangleIndex = 0;
+	int normalIndex = 0;
+	UWorld* world = GetWorld();
+	FVector distance = FVector(mov.x, mov.y, mov.z);
+
+	USkeletalMeshComponent* SMComponent = GetMesh();
+	USkeletalMesh* SM = SMComponent->SkeletalMesh;
+	FSkeletalMeshRenderData* SMRenderData = SM->GetResourceForRendering();
+	FSkeletalMeshLODRenderData& SMLodRender = SMRenderData->LODRenderData[0];
+
+	for (int32 j = 0; j < SMLodRender.RenderSections.Num(); j++)
+	{
+		for (int32 i = 0; i < SMLodRender.RenderSections[j].GetNumVertices(); i++)
+		{
+			FVector VertexPosition = SMComponent->GetSkinnedVertexPosition(
+				SMComponent,
+				SMLodRender.RenderSections[j].BaseVertexIndex + i,
+				SMLodRender,
+				*smData.vb)
+				+ GetActorLocation() + SMComponent->GetRelativeLocation();
+			//VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
+			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
+			Model_vertices[i] = VertexPosition;
+		}
+	}
+
+	// v: x, y, z의 형식의 데이터
+	//for (int32 i = 0; i < smData.vert_count; ++i)
+	//{
+	//	Model_vertices[i] += distance;
+	//}
+
+	for (int i = 0; i < smData.tri_count; ++i)
+	{
+		int vertexNumber[4] = { 0, 0, 0 };
+		vertexNumber[0] = smData.Ind[3 * i];
+		vertexNumber[1] = smData.Ind[3 * i + 1];
+		vertexNumber[2] = smData.Ind[3 * i + 2];
+
+		int tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->faces[triangleIndex + tCounter] = Model_vertices[vertexNumber[j]].X;
+			obj->faces[triangleIndex + tCounter + 1] = Model_vertices[vertexNumber[j]].Z;
+			obj->faces[triangleIndex + tCounter + 2] = Model_vertices[vertexNumber[j]].Y;
+			tCounter += POINTS_PER_VERTEX;
+		}
+
+		float coord1[3] = { obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2] };
+		float coord2[3] = { obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5] };
+		float coord3[3] = { obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8] };
+
+		FVector vec1(obj->faces[triangleIndex], obj->faces[triangleIndex + 2], obj->faces[triangleIndex + 1]);
+		FVector vec2(obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 5], obj->faces[triangleIndex + 4]);
+		FVector vec3(obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 8], obj->faces[triangleIndex + 7]);
+		//DrawDebugLine(world, vec1, vec2, FColor::Blue, false, 0.5f, 0, 0.1);
+		//DrawDebugLine(world, vec2, vec3, FColor::Blue, false, 0.5f, 0, 0.1);
+		//DrawDebugLine(world, vec3, vec1, FColor::Blue, false, 0.5f, 0, 0.1);
+
+		/* calculate Vector1 and Vector2 */
+		float va[3], vb[3], vr[3], val;
+
+		va[0] = coord1[0] - coord2[0];
+		va[1] = coord1[1] - coord2[1];
+		va[2] = coord1[2] - coord2[2];
+
+		vb[0] = coord1[0] - coord3[0];
+		vb[1] = coord1[1] - coord3[1];
+		vb[2] = coord1[2] - coord3[2];
+
+
+		/* cross product */
+		vr[0] = va[1] * vb[2] - vb[1] * va[2];
+		vr[1] = vb[0] * va[2] - va[0] * vb[2];
+		vr[2] = va[0] * vb[1] - vb[0] * va[1];
+
+		/* normalization factor */
+		val = sqrtf(vr[0] * vr[0] + vr[1] * vr[1] + vr[2] * vr[2]);
+
+		float norm[3];
+		norm[0] = vr[0] / val;
+		norm[1] = vr[1] / val;
+		norm[2] = vr[2] / val;
+
+		tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->normals[normalIndex + tCounter] = norm[0];
+			obj->normals[normalIndex + tCounter + 1] = norm[1];
+			obj->normals[normalIndex + tCounter + 2] = norm[2];
+			tCounter += POINTS_PER_VERTEX;
+		}
+
+		triangleIndex += TOTAL_FLOATS_IN_TRIANGLE;
+		normalIndex += TOTAL_FLOATS_IN_TRIANGLE;
+	}
+}
+
 void ATestHairCharacter::InitHairModel()
 {
 	//---Save Skeletal Mesh Info
@@ -478,7 +586,7 @@ void ATestHairCharacter::InitHairModel()
 		CharacterMesh = m_objects[i];
 	}
 
-	int numStrands = 10; 
+	int numStrands = 40; 
 	if (!InitHairRoot(CharacterMesh, numStrands, THRESH))
 	{
 		UE_LOG(LogTemp, Error, TEXT("ERR::InitHairModel::Failed to initialize hair"));
@@ -496,12 +604,12 @@ void ATestHairCharacter::InitHairModel()
 			HairRoots[i].spawn_pt.z(),
 			HairRoots[i].spawn_pt.y());
 
-		normals[i] = pilar::Vector3f((HairRoots[i].spawn_pt.x()), (HairRoots[i].spawn_pt.z()), 0);
-		//normals[i] = pilar::Vector3f(m_normal.X, m_normal.Z, m_normal.Y);
+		//normals[i] = pilar::Vector3f((HairRoots[i].spawn_pt.x()), (HairRoots[i].spawn_pt.z()), 0);
+		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Z, m_normal.Y);
 	}
 
 	// Gravity
-	pilar::Vector3f gravity(0.0f, GRAVITY, 0.0f);
+	pilar::Vector3f gravity(0.0f, -GRAVITY, 0.0f);
 
 	//Load geometry from file
 	m_model = new ModelOBJ;
@@ -524,7 +632,7 @@ void ATestHairCharacter::InitHairModel()
 		3200.f, 80.f, 80.f, 4.905f,
 		32000.f, 2500.f, 2500.f, 125.f,
 		5.f, 5.f, 5.f,
-		DOMAIN_DIM, 254.38f, 127.19f, 2.54f, 1.27f,
+		DOMAIN_DIM, 690.f, 345.f, 6.9f, 3.45f,
 		gravity,
 		roots,
 		normals,
@@ -535,6 +643,88 @@ void ATestHairCharacter::InitHairModel()
 	m_hairs->initialise(m_hairs->get_state->position);
 
 	UE_LOG(LogTemp, Warning, TEXT("DBG::InitHairModel - finish"));
+}
+
+void ATestHairCharacter::UpdateHairSpline()
+{
+	/****************************************
+	이전의 Spline 위치와 Mesh를 없애 할당을 하나로 함
+	*****************************************/
+	if (m_SplineHairs.Num() > 0)
+	{
+		for (int32 i = 0; i < m_SplineHairs.Num(); i++)
+		{
+			m_SplineHairs[i]->ClearSplinePoints(true);
+		}
+	}
+
+	if (m_SplineHairMeshes.Num() > 0)
+	{
+		for (int32 i = 0; i < m_SplineHairMeshes.Num(); i++)
+		{
+			if (m_SplineHairMeshes[i])
+				m_SplineHairMeshes[i]->DestroyComponent();
+		}
+	}
+	m_SplineHairs.Empty();
+	m_SplineHairMeshes.Empty();
+
+	for (int32 h = 0; h < m_hairs->h_state->numStrands; h++)
+	{
+		//USplineComponent* SplineComponent = NewObject<USplineComponent>(this, USplineComponent::StaticClass());
+		FVector root(
+			m_hairs->get_state->root[h].x, 
+			m_hairs->get_state->root[h].z,
+			m_hairs->get_state->root[h].y);
+		FVector first(
+			m_hairs->get_state->position[h * m_hairs->h_state->numParticles].x,
+			m_hairs->get_state->position[h * m_hairs->h_state->numParticles].z,
+			m_hairs->get_state->position[h * m_hairs->h_state->numParticles].y);
+		SplineComponent->AddSplinePointAtIndex(root, 0, ESplineCoordinateSpace::World);
+		//SplineComponent->AddSplinePointAtIndex(first, 1, ESplineCoordinateSpace::World);
+
+		for (int32 SplineCount = 0; SplineCount < m_hairs->h_state->numParticles; SplineCount++)
+		{
+			FVector vector(
+				m_hairs->get_state->position[h * m_hairs->h_state->numParticles + SplineCount].x,
+				m_hairs->get_state->position[h * m_hairs->h_state->numParticles + SplineCount].z,
+				m_hairs->get_state->position[h * m_hairs->h_state->numParticles + SplineCount].y);
+			SplineComponent->AddSplinePointAtIndex(vector, SplineCount + 1, ESplineCoordinateSpace::World);
+			FVector Tangent = SplineComponent->GetLocationAtSplinePoint(SplineCount + 1, ESplineCoordinateSpace::Local) - SplineComponent->GetLocationAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
+
+			USplineMeshComponent* HairSplineComponent = NewObject<USplineMeshComponent>(this, USplineMeshComponent::StaticClass());
+			HairSplineComponent->SetForwardAxis(ESplineMeshAxis::Z);
+			if (DefaultMaterial)
+			{
+				HairSplineComponent->SetMaterial(0, DefaultMaterial);
+			}
+			HairSplineComponent->SetStaticMesh(SplineMesh);
+			// static move
+			HairSplineComponent->SetMobility(EComponentMobility::Movable);
+			HairSplineComponent->CreationMethod = EComponentCreationMethod::UserConstructionScript;
+			// Register
+			HairSplineComponent->RegisterComponentWithWorld(GetWorld());
+			// Spline Component에 따라 크기 위치를 변경함
+			HairSplineComponent->AttachToComponent(SplineComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			//HairSplineComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+			//HairSplineComponent->SetStartScale(FVector2D(0.05f, 0.05f));
+			//HairSplineComponent->SetEndScale(FVector2D(0.05f, 0.05f));
+
+			// 시작 지점
+			const FVector StartPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount, ESplineCoordinateSpace::Local);
+			const FVector StartTangent = Tangent;
+			//const FVector StartTangent = SplineComponent->GetTangentAtDistanceAlongSpline(SplineComponent->GetSplineLength(), ESplineCoordinateSpace::Local);
+			const FVector EndPoint = SplineComponent->GetLocationAtSplinePoint(SplineCount + 1, ESplineCoordinateSpace::Local);
+			const FVector EndTangent = -1 * Tangent;
+			//const FVector EndTangent = SplineComponent->GetTangentAtDistanceAlongSpline(SplineComponent->GetSplineLength(), ESplineCoordinateSpace::Local);
+			//const FVector EndTangent = SplineComponent->GetTangentAtSplinePoint(SplineCount + 1, ESplineCoordinateSpace::Local);
+			HairSplineComponent->SetStartAndEnd(StartPoint, StartTangent, EndPoint, EndTangent, true);
+			//HairSplineComponent->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
+
+			m_SplineHairMeshes.Add(HairSplineComponent);
+		}
+		m_SplineHairs.Add(SplineComponent);
+	}
 }
 
 void ATestHairCharacter::DoOnceSimulation()
@@ -555,7 +745,7 @@ void ATestHairCharacter::DoOnceSimulation()
 				pos[h * m_hairs->h_state->numParticles + par].x,
 				pos[h * m_hairs->h_state->numParticles + par].z,
 				pos[h * m_hairs->h_state->numParticles + par].y);
-			DrawDebugPoint(world, vec1, 5.f, FColor(255, 255, 0), 2.f);
+			//DrawDebugPoint(world, vec1, 5.f, FColor(255, 255, 0), 2.f);
 
 			if (par + 1 < m_hairs->h_state->numParticles)
 			{
@@ -564,11 +754,11 @@ void ATestHairCharacter::DoOnceSimulation()
 					pos[h * m_hairs->h_state->numParticles + par + 1].z,
 					pos[h * m_hairs->h_state->numParticles + par + 1].y);
 
-				DrawDebugLine(world, vec1, vec2, FColor::Emerald, true, -1, 0, 2.f);
+				//DrawDebugLine(world, vec1, vec2, FColor::Emerald, true, -1, 0, 2.f);
 			}
 		}
 	}
-	//UpdateHairSpline();
+	UpdateHairSpline();
 	UE_LOG(LogType, Warning, TEXT("DoOnceSimulation - Finish"));
 }
 
@@ -582,10 +772,15 @@ void ATestHairCharacter::Tick(float DeltaTime)
 		USkeletalMeshComponent* SMComponent = GetMesh();
 		USkeletalMesh* SM = SMComponent->SkeletalMesh;
 		FSkeletalMeshRenderData* SMRenderData = SM->GetResourceForRendering();
+		FSkeletalMeshLODRenderData& SMLodRender = SMRenderData->LODRenderData[0];
 
 		m_before = pilar::Vector3f(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
-		FVector VertexPosition = SMComponent->GetSkinnedVertexPosition(SMComponent, 0, SMRenderData->LODRenderData[0], *SMComponent->GetSkinWeightBuffer(0))
-			+ SMComponent->GetRelativeLocation();
+		FVector VertexPosition = SMComponent->GetSkinnedVertexPosition(
+			SMComponent, 
+			SMLodRender.RenderSections[1].BaseVertexIndex + 10,
+			SMRenderData->LODRenderData[0], 
+			*SMComponent->GetSkinWeightBuffer(0)) + SMComponent->GetRelativeLocation();
+		VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
 		m_MeshBefore = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
 
 		UWorld* world = GetWorld();
@@ -594,22 +789,34 @@ void ATestHairCharacter::Tick(float DeltaTime)
 			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
 			InitHairModel();
 
-			VertexPosition = SMComponent->GetSkinnedVertexPosition(SMComponent, 0, SMRenderData->LODRenderData[0], *SMComponent->GetSkinWeightBuffer(0))
+			VertexPosition = SMComponent->GetSkinnedVertexPosition(
+				SMComponent, 
+				SMLodRender.RenderSections[1].BaseVertexIndex + 10,
+				SMRenderData->LODRenderData[0],
+				*SMComponent->GetSkinWeightBuffer(0))
 				+ SMComponent->GetRelativeLocation();
+			VertexPosition = VertexPosition.RotateAngleAxis(108, FVector(0, 0, 1));
 			m_MeshBefore = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
-			DrawDebugBox(world, FVector(0, 0, 0), FVector(6.9 * DOMAIN_DIM, 6.9 * DOMAIN_DIM, 6.9 * DOMAIN_DIM), FColor::Purple, true, -1, 0, 5);
+			DrawDebugBox(world, 
+				FVector(0, 0, 0), 
+				FVector(m_hairs->get_state->cell_width * DOMAIN_DIM, m_hairs->get_state->cell_width * DOMAIN_DIM, m_hairs->get_state->cell_width * DOMAIN_DIM),
+				FColor::Purple, true, -1, 0, 5);
 			bIsInitMesh = false;
 		}
 
 		//---Move distance
 		m_move = m_before - m_after;
-		m_Meshmove = m_MeshBefore - m_Meshafter;
+		if (m_Meshafter.length() > 0)
+		{
+			m_Meshmove = m_MeshBefore - m_Meshafter;
+		}
+
 		//---If Move, Update Model Grid
-		//if (m_move.length() > 0)
-		//{
-		//	UpdateModel(m_model, m_move);
-		//	pilar::initDistanceField(m_model, hairs->get_state->grid);
-		//}
+		if (m_move.length() > 0 || m_Meshmove.length() > 0)
+		{
+			UpdateModel(m_model, m_move);
+			pilar::initDistanceField(m_model, m_hairs->get_state->grid, m_hairs->get_state);
+		}
 
 		//---Update Hair
 		pilar::Vector3f* position = m_hairs->get_state->position;
@@ -618,32 +825,44 @@ void ATestHairCharacter::Tick(float DeltaTime)
 		{
 			m_hairs->get_state->root[h].x += m_move.x + m_Meshmove.x;
 			m_hairs->get_state->root[h].y += m_move.z + m_Meshmove.z;
-			//m_hairs->get_state->root[h].z += m_move.y + m_Meshmove.y;
+			//m_hairs->get_state->root[h].z += m_move.y;// +m_Meshmove.y;
+
+			//m_hairs->get_state->root[h].x += m_move.x;
+			//m_hairs->get_state->root[h].y += m_move.z;
+			//m_hairs->get_state->root[h].z += m_move.y;
 
 			FVector root(m_hairs->get_state->root[h].x, m_hairs->get_state->root[h].z, m_hairs->get_state->root[h].y);
 			FVector first(
 				m_hairs->get_state->position[h * m_hairs->h_state->numParticles].x + m_move.x + m_Meshmove.x,
 				m_hairs->get_state->position[h * m_hairs->h_state->numParticles].z + m_move.y + m_Meshmove.y,
-				m_hairs->get_state->position[h * m_hairs->h_state->numParticles].y + m_move.z + m_Meshmove.z);
-			DrawDebugLine(world, root, first, FColor::Emerald, false, -1, 0, 0.8f);
+				m_hairs->get_state->position[h * m_hairs->h_state->numParticles].y + m_move.z);
+			//FVector first(
+			//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles].x + m_move.x,
+			//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles].z + m_move.y,
+			//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles].y + m_move.z);
+			//DrawDebugLine(world, root, first, FColor::Emerald, false, -1, 0, 0.8f);
 
 			for (int32 par = 0; par < m_hairs->h_state->numParticles; par++)
 			{
 				m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].x += m_move.x + m_Meshmove.x;
 				m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].y += m_move.z + m_Meshmove.z;
-				//m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].z += m_move.y + m_Meshmove.y;
+				//m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].z += m_move.y + m_Meshmove.y;	
+
+				//m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].x += m_move.x;
+				//m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].y += m_move.z;
+				//m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].z += m_move.y;
 
 				//--- For Debug Particle position & velocity
-				UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"), 
-					h, par,
-					m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].x,
-					m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].z,
-					m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].y);
-				UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
-					h, par,
-					m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].x,
-					m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].z,
-					m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].y);
+				//UE_LOG(LogType, Log, TEXT("Position %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+				//	h, par,
+				//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].x,
+				//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].z,
+				//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par].y);
+				//UE_LOG(LogType, Log, TEXT("Velocity %d Hair, %d Particle - x:%f, y:%f, z:%f"),
+				//	h, par,
+				//	m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].x,
+				//	m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].z,
+				//	m_hairs->get_state->velocity[h * m_hairs->h_state->numParticles + par].y);
 
 				//--- For visualize
 				FVector vec1(
@@ -657,19 +876,33 @@ void ATestHairCharacter::Tick(float DeltaTime)
 					FVector vec2(
 						m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].x + m_move.x + m_Meshmove.x,
 						m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].z + m_move.y + m_Meshmove.y,
-						m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].y + m_move.z + m_Meshmove.z);
+						m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].y + m_move.z);
+					
+					//FVector vec2(
+					//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].x + m_move.x,
+					//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].z + m_move.y,
+					//	m_hairs->get_state->position[h * m_hairs->h_state->numParticles + par + 1].y + m_move.z);
+
 
 					//--- For visualize
-					DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
+					//DrawDebugLine(world, vec1, vec2, FColor::Red, false, -1, 0, 0.8f);
 				}
 			}
-			
+
 			m_after = pilar::Vector3f(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
-			
-			VertexPosition = SMComponent->GetSkinnedVertexPosition(SMComponent, 0, SMRenderData->LODRenderData[0], *SMComponent->GetSkinWeightBuffer(0)) 
+
+			VertexPosition = SMComponent->GetSkinnedVertexPosition(
+				SMComponent,
+				SMLodRender.RenderSections[1].BaseVertexIndex + 10,
+				SMRenderData->LODRenderData[0],
+				*SMComponent->GetSkinWeightBuffer(0))
 				+ SMComponent->GetRelativeLocation();
+			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
 			m_Meshafter = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
+			//DrawDebugPoint(world, VertexPosition, 4.f, FColor::Green, false, 0.1f);
+			//UE_LOG(LogType, Log, TEXT("Particle - x:%f, y:%f, z:%f"), m_Meshmove.x, m_Meshmove.y, m_Meshmove.z);
 		}
+		UpdateHairSpline();
 	}
 }
 

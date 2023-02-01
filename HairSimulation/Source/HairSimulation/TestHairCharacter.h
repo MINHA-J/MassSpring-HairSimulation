@@ -122,7 +122,15 @@ public:
 		bool bStartSimulate = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
 		bool bIsInitMesh = true;
-
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
+		UStaticMesh* SplineMesh;
+	UPROPERTY(VisibleAnyWhere, BlueprintReadWrite, Category = "Simulation", meta = (AllowPrivateAccess = "true"))
+		USplineComponent* SplineComponent;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Simulation")
+		class UMaterialInterface* DefaultMaterial;
+	UPROPERTY(EditAnywhere, CallInEditor, Category = "Simulation")
+		FVector m_normal = FVector(1.0f, 0.0f, 1.0f);
+	
 	void InitHairModel(); // Init Hair root, Init CUHair
 	bool InitHairRoot(const MeshCustom* m, int num_spawns, float thresh = 0.4);
 
@@ -131,10 +139,16 @@ public:
 	float length_sq(const Vector3f& v);
 
 	void LoadModel(ModelOBJ* obj);
+	void UpdateModel(ModelOBJ* obj, pilar::Vector3f mov);
+
+	void UpdateHairSpline();
 
 	vector<MeshCustom*> m_objects;
 	vector<HairStrand> HairRoots;
 	TArray<FVector> Model_vertices;
+
+	TArray<USplineComponent*> m_SplineHairs;
+	TArray<USplineMeshComponent*> m_SplineHairMeshes;
 
 	ModelOBJ* m_model;
 	pilar::CUHair* m_hairs;
