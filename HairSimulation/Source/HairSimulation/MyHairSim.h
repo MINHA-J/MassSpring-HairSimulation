@@ -149,7 +149,7 @@ struct Triangle
 
 namespace pilar
 {
-	void initDistanceField(ModelOBJ *obj, float* grid, HairState* state);
+	void initDistanceField(ModelOBJ *obj, int modelNum, float* grid, HairState* state);
 
 	class CUHair
 	{
@@ -246,6 +246,30 @@ public:
 		bool has_uv, has_col;
 	} smData;
 
+	struct
+	{
+		// Static Mesh Deserialized(Á÷·ÄÈ­)
+		TArray<FVector>            Pos;
+		TArray<FColor>             Col;
+		TArray<FVector>            Normal;
+		TArray<FProcMeshTangent>   Tang;
+		TArray<FVector2D>          UV;
+		TArray<int32>              Ind;
+		TArray<FIntVector>         Tris;
+
+		// Vertices Shared Tris
+		TArray<int32>* vtris;
+
+		// SM Buffer Ptrs
+		FPositionVertexBuffer* vb = nullptr; // Position Vertex Buffer (Position)
+		FStaticMeshVertexBuffer* smvb = nullptr; // Static Mesh Buffer (Static Mesh)
+		FColorVertexBuffer* cvb = nullptr; // Color Vertex Buffer (Color)
+		FRawStaticIndexBuffer* ib = nullptr; // Tri Index Buffer (Index)
+
+		int32 vert_count, ind_count, adj_count, tri_count;
+		bool has_uv, has_col;
+	} smHandData;
+
 	// Mesh Properties
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 		UStaticMeshComponent* m_StaticMesh;
@@ -277,8 +301,14 @@ public:
 	//void OnRegister() override;
 	vector<MeshCustom*> m_objects;
 	MeshCustom* mesh_head;
+
+	AActor* HandModel;
+
 	ModelOBJ* m_model;
 	ModelOBJ* m_hand;
+	ModelOBJ* Models;
+
+	UStaticMeshComponent* Hand;
 
 	vector<HairStrand> root_hair;
 	pilar::Vector3f m_before = pilar::Vector3f(0.0f, 0.0f, 0.0f);
@@ -293,6 +323,9 @@ public:
 	bool init_HairRoot(const MeshCustom* m, int num_spawns, float thresh = 0.4);
 	void loadModel(ModelOBJ* obj);
 	void UpdateModel(ModelOBJ* obj, pilar::Vector3f mov);
+
+	void LoadHandModel(ModelOBJ* obj);
+	void UpdateHandModel(ModelOBJ* obj);
 
 	void InitHairModel();
 	void UpdateHairSpline();

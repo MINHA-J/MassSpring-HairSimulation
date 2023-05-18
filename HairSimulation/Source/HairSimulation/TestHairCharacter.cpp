@@ -198,7 +198,7 @@ void ATestHairCharacter::LoadMeshes()
 				+ GetActorLocation() + SMComponent->GetRelativeLocation();
 
 			//VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 1 ,0));
-			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1)); 
+			VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 0, 1)); 
 			//VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(1, 0, 0));
 
 			//FVector VertexPosition = SMLodRender.StaticVertexBuffers.PositionVertexBuffer.VertexPosition(i) + GetActorLocation() + FVector(0, 0, -97);
@@ -493,7 +493,7 @@ void ATestHairCharacter::UpdateModel(ModelOBJ* obj, pilar::Vector3f mov)
 				*smData.vb)
 				+ GetActorLocation() + SMComponent->GetRelativeLocation();
 			//VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
-			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
+			VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 0, 1));
 			Model_vertices[i] = VertexPosition;
 		}
 	}
@@ -527,9 +527,9 @@ void ATestHairCharacter::UpdateModel(ModelOBJ* obj, pilar::Vector3f mov)
 		FVector vec1(obj->faces[triangleIndex], obj->faces[triangleIndex + 2], obj->faces[triangleIndex + 1]);
 		FVector vec2(obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 5], obj->faces[triangleIndex + 4]);
 		FVector vec3(obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 8], obj->faces[triangleIndex + 7]);
-		//DrawDebugLine(world, vec1, vec2, FColor::Blue, false, 0.5f, 0, 0.1);
-		//DrawDebugLine(world, vec2, vec3, FColor::Blue, false, 0.5f, 0, 0.1);
-		//DrawDebugLine(world, vec3, vec1, FColor::Blue, false, 0.5f, 0, 0.1);
+		DrawDebugLine(world, vec1, vec2, FColor::Blue, false, 0.5f, 0, 0.1);
+		DrawDebugLine(world, vec2, vec3, FColor::Blue, false, 0.5f, 0, 0.1);
+		DrawDebugLine(world, vec3, vec1, FColor::Blue, false, 0.5f, 0, 0.1);
 
 		/* calculate Vector1 and Vector2 */
 		float va[3], vb[3], vr[3], val;
@@ -586,7 +586,7 @@ void ATestHairCharacter::InitHairModel()
 		CharacterMesh = m_objects[i];
 	}
 
-	int numStrands = 40; 
+	int numStrands = 50; 
 	if (!InitHairRoot(CharacterMesh, numStrands, THRESH))
 	{
 		UE_LOG(LogTemp, Error, TEXT("ERR::InitHairModel::Failed to initialize hair"));
@@ -604,12 +604,12 @@ void ATestHairCharacter::InitHairModel()
 			HairRoots[i].spawn_pt.z(),
 			HairRoots[i].spawn_pt.y());
 
-		//normals[i] = pilar::Vector3f((HairRoots[i].spawn_pt.x()), (HairRoots[i].spawn_pt.z()), 0);
-		normals[i] = pilar::Vector3f(m_normal.X, m_normal.Z, m_normal.Y);
+		normals[i] = pilar::Vector3f((HairRoots[i].spawn_pt.x()), (HairRoots[i].spawn_pt.z()), 0);
+		//normals[i] = pilar::Vector3f(m_normal.X, m_normal.Z, m_normal.Y);
 	}
 
 	// Gravity
-	pilar::Vector3f gravity(0.0f, -GRAVITY, 0.0f);
+	pilar::Vector3f gravity(0.0f, GRAVITY, 0.0f);
 
 	//Load geometry from file
 	m_model = new ModelOBJ;
@@ -780,7 +780,7 @@ void ATestHairCharacter::Tick(float DeltaTime)
 			SMLodRender.RenderSections[1].BaseVertexIndex + 10,
 			SMRenderData->LODRenderData[0], 
 			*SMComponent->GetSkinWeightBuffer(0)) + SMComponent->GetRelativeLocation();
-		VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
+		VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 0, 1));
 		m_MeshBefore = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
 
 		UWorld* world = GetWorld();
@@ -795,7 +795,7 @@ void ATestHairCharacter::Tick(float DeltaTime)
 				SMRenderData->LODRenderData[0],
 				*SMComponent->GetSkinWeightBuffer(0))
 				+ SMComponent->GetRelativeLocation();
-			VertexPosition = VertexPosition.RotateAngleAxis(108, FVector(0, 0, 1));
+			VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 0, 1));
 			m_MeshBefore = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
 			DrawDebugBox(world, 
 				FVector(0, 0, 0), 
@@ -815,7 +815,7 @@ void ATestHairCharacter::Tick(float DeltaTime)
 		if (m_move.length() > 0 || m_Meshmove.length() > 0)
 		{
 			UpdateModel(m_model, m_move);
-			pilar::initDistanceField(m_model, m_hairs->get_state->grid, m_hairs->get_state);
+			pilar::initDistanceField(m_model, 1, m_hairs->get_state->grid, m_hairs->get_state);
 		}
 
 		//---Update Hair
@@ -897,7 +897,7 @@ void ATestHairCharacter::Tick(float DeltaTime)
 				SMRenderData->LODRenderData[0],
 				*SMComponent->GetSkinWeightBuffer(0))
 				+ SMComponent->GetRelativeLocation();
-			VertexPosition = VertexPosition.RotateAngleAxis(180, FVector(0, 0, 1));
+			VertexPosition = VertexPosition.RotateAngleAxis(90, FVector(0, 0, 1));
 			m_Meshafter = pilar::Vector3f(VertexPosition.X, VertexPosition.Y, VertexPosition.Z);
 			//DrawDebugPoint(world, VertexPosition, 4.f, FColor::Green, false, 0.1f);
 			//UE_LOG(LogType, Log, TEXT("Particle - x:%f, y:%f, z:%f"), m_Meshmove.x, m_Meshmove.y, m_Meshmove.z);

@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 #include "UObject/ConstructorHelpers.h"
+#include "EngineUtils.h"
 
 static bool check_tex_opaque(unsigned int tex);
 MeshCustom::MeshCustom()
@@ -53,7 +54,7 @@ void MeshCustom::calc_bbox()
 
 namespace pilar
 {
-	void initDistanceField(ModelOBJ *obj, float* grid, HairState* state)
+	void initDistanceField(ModelOBJ *obj, int modelNum, float* grid, HairState* state)
 	{
 		float result[DOMAIN_DIM][DOMAIN_DIM][DOMAIN_DIM];
 
@@ -67,262 +68,265 @@ namespace pilar
 		float delta = 0.25f;
 		float echo = state->cell_width * delta;
 
-		int numVertices = obj->totalConnectedPoints / POINTS_PER_VERTEX;
-		int numTriangles = obj->totalConnectedTriangles / TOTAL_FLOATS_IN_TRIANGLE;
-
-		//read in each triangle with its normal data
-		for (int i = 0; i < numTriangles; i++)
+		for (int num = 0; num < modelNum; num++)
 		{
-			float triangle[3][POINTS_PER_VERTEX];
+			int numVertices = obj[num].totalConnectedPoints / POINTS_PER_VERTEX;
+			int numTriangles = obj[num].totalConnectedTriangles / TOTAL_FLOATS_IN_TRIANGLE;
 
-			for (int j = 0; j < POINTS_PER_VERTEX; j++)
+			//read in each triangle with its normal data
+			for (int i = 0; i < numTriangles; i++)
 			{
-				triangle[j][0] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3];
-				triangle[j][1] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 1];
-				triangle[j][2] = obj->faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 2];
-			}
+				float triangle[3][POINTS_PER_VERTEX];
 
-			float normal[POINTS_PER_VERTEX];
-			normal[0] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE];
-			normal[1] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE + 1];
-			normal[2] = obj->normals[i*TOTAL_FLOATS_IN_TRIANGLE + 2];
-
-			//build prism
-			float prism[6][POINTS_PER_VERTEX];
-			for (int j = 0; j < POINTS_PER_VERTEX; j++)
-			{
-				prism[j][0] = triangle[j][0] + echo * normal[0];
-				prism[j][1] = triangle[j][1] + echo * normal[1];
-				prism[j][2] = triangle[j][2] + echo * normal[2];
-				prism[j + 3][0] = triangle[j][0] - echo * normal[0];
-				prism[j + 3][1] = triangle[j][1] - echo * normal[1];
-				prism[j + 3][2] = triangle[j][2] - echo * normal[2];
-			}
-
-			//Axis-aligned bounding box
-			float aabb[2][POINTS_PER_VERTEX]; //-x,-y,-z,+x,+y,+z
-			aabb[0][0] = FLT_MAX;
-			aabb[0][1] = FLT_MAX;
-			aabb[0][2] = FLT_MAX;
-			aabb[1][0] = -FLT_MAX;
-			aabb[1][1] = -FLT_MAX;
-			aabb[1][2] = -FLT_MAX;
-
-			//Build the aabb using the minimum and maximum values of the prism
-			for (int j = 0; j < 6; j++)
-			{
-				//minimum x, y, z
-				aabb[0][0] = std::min(prism[j][0], aabb[0][0]);
-				aabb[0][1] = std::min(prism[j][1], aabb[0][1]);
-				aabb[0][2] = std::min(prism[j][2], aabb[0][2]);
-
-				//maximum x, y, z
-				aabb[1][0] = std::max(prism[j][0], aabb[1][0]);
-				aabb[1][1] = std::max(prism[j][1], aabb[1][1]);
-				aabb[1][2] = std::max(prism[j][2], aabb[1][2]);
-			}
-
-			//normalise to the grid
-			aabb[0][0] = (aabb[0][0] + state->domain_half - state->cell_half) / state->cell_width;
-			//aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
-			aabb[0][1] = (aabb[0][1] + state->domain_half - state->cell_half) / state->cell_width;
-			aabb[0][2] = (aabb[0][2] + state->domain_half - state->cell_half) / state->cell_width;
-			aabb[1][0] = (aabb[1][0] + state->domain_half - state->cell_half) / state->cell_width;
-			//aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
-			aabb[1][1] = (aabb[1][1] + state->domain_half - state->cell_half) / state->cell_width;
-			aabb[1][2] = (aabb[1][2] + state->domain_half - state->cell_half) / state->cell_width;
-
-			//round aabb
-			aabb[0][0] = floor(aabb[0][0]);
-			aabb[0][1] = floor(aabb[0][1]);
-			aabb[0][2] = floor(aabb[0][2]);
-			aabb[1][0] = ceil(aabb[1][0]);
-			aabb[1][1] = ceil(aabb[1][1]);
-			aabb[1][2] = ceil(aabb[1][2]);
-
-			int iaabb[2][POINTS_PER_VERTEX];
-			iaabb[0][0] = int(aabb[0][0]);
-			iaabb[0][1] = int(aabb[0][1]);
-			iaabb[0][2] = int(aabb[0][2]);
-			iaabb[1][0] = int(aabb[1][0]);
-			iaabb[1][1] = int(aabb[1][1]);
-			iaabb[1][2] = int(aabb[1][2]);
-
-			//build edge vectors
-			float edge[3][POINTS_PER_VERTEX];
-			edge[0][0] = triangle[1][0] - triangle[0][0];
-			edge[0][1] = triangle[1][1] - triangle[0][1];
-			edge[0][2] = triangle[1][2] - triangle[0][2];
-			edge[1][0] = triangle[2][0] - triangle[1][0];
-			edge[1][1] = triangle[2][1] - triangle[1][1];
-			edge[1][2] = triangle[2][2] - triangle[1][2];
-			edge[2][0] = triangle[0][0] - triangle[2][0];
-			edge[2][1] = triangle[0][1] - triangle[2][0];
-			edge[2][2] = triangle[0][2] - triangle[2][0];
-
-			//build edge normal vectors by cross product with triangle normal
-			float edgeNormal[3][POINTS_PER_VERTEX];
-			edgeNormal[0][0] = normal[1] * edge[0][2] - normal[2] * edge[0][1];
-			edgeNormal[0][1] = normal[2] * edge[0][0] - normal[0] * edge[0][2];
-			edgeNormal[0][2] = normal[0] * edge[0][1] - normal[1] * edge[0][0];
-			edgeNormal[1][0] = normal[1] * edge[1][2] - normal[2] * edge[1][1];
-			edgeNormal[1][1] = normal[2] * edge[1][0] - normal[0] * edge[1][2];
-			edgeNormal[1][2] = normal[0] * edge[1][1] - normal[1] * edge[1][0];
-			edgeNormal[2][0] = normal[1] * edge[2][2] - normal[2] * edge[2][1];
-			edgeNormal[2][1] = normal[2] * edge[2][0] - normal[0] * edge[2][2];
-			edgeNormal[2][2] = normal[0] * edge[2][1] - normal[1] * edge[2][0];
-
-			for (int xx = iaabb[0][0]; xx <= iaabb[1][0]; xx++)
-			{
-				for (int yy = iaabb[0][1]; yy <= iaabb[1][1]; yy++)
+				for (int j = 0; j < POINTS_PER_VERTEX; j++)
 				{
-					for (int zz = iaabb[0][2]; zz <= iaabb[1][2]; zz++)
+					triangle[j][0] = obj[num].faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3];
+					triangle[j][1] = obj[num].faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 1];
+					triangle[j][2] = obj[num].faces[i*TOTAL_FLOATS_IN_TRIANGLE + j * 3 + 2];
+				}
+
+				float normal[POINTS_PER_VERTEX];
+				normal[0] = obj[num].normals[i*TOTAL_FLOATS_IN_TRIANGLE];
+				normal[1] = obj[num].normals[i*TOTAL_FLOATS_IN_TRIANGLE + 1];
+				normal[2] = obj[num].normals[i*TOTAL_FLOATS_IN_TRIANGLE + 2];
+
+				//build prism
+				float prism[6][POINTS_PER_VERTEX];
+				for (int j = 0; j < POINTS_PER_VERTEX; j++)
+				{
+					prism[j][0] = triangle[j][0] + echo * normal[0];
+					prism[j][1] = triangle[j][1] + echo * normal[1];
+					prism[j][2] = triangle[j][2] + echo * normal[2];
+					prism[j + 3][0] = triangle[j][0] - echo * normal[0];
+					prism[j + 3][1] = triangle[j][1] - echo * normal[1];
+					prism[j + 3][2] = triangle[j][2] - echo * normal[2];
+				}
+
+				//Axis-aligned bounding box
+				float aabb[2][POINTS_PER_VERTEX]; //-x,-y,-z,+x,+y,+z
+				aabb[0][0] = FLT_MAX;
+				aabb[0][1] = FLT_MAX;
+				aabb[0][2] = FLT_MAX;
+				aabb[1][0] = -FLT_MAX;
+				aabb[1][1] = -FLT_MAX;
+				aabb[1][2] = -FLT_MAX;
+
+				//Build the aabb using the minimum and maximum values of the prism
+				for (int j = 0; j < 6; j++)
+				{
+					//minimum x, y, z
+					aabb[0][0] = std::min(prism[j][0], aabb[0][0]);
+					aabb[0][1] = std::min(prism[j][1], aabb[0][1]);
+					aabb[0][2] = std::min(prism[j][2], aabb[0][2]);
+
+					//maximum x, y, z
+					aabb[1][0] = std::max(prism[j][0], aabb[1][0]);
+					aabb[1][1] = std::max(prism[j][1], aabb[1][1]);
+					aabb[1][2] = std::max(prism[j][2], aabb[1][2]);
+				}
+
+				//normalise to the grid
+				aabb[0][0] = (aabb[0][0] + state->domain_half - state->cell_half) / state->cell_width;
+				//aabb[0][1] = (aabb[0][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+				aabb[0][1] = (aabb[0][1] + state->domain_half - state->cell_half) / state->cell_width;
+				aabb[0][2] = (aabb[0][2] + state->domain_half - state->cell_half) / state->cell_width;
+				aabb[1][0] = (aabb[1][0] + state->domain_half - state->cell_half) / state->cell_width;
+				//aabb[1][1] = (aabb[1][1] + DOMAIN_HALF + (delta/2) - CELL_HALF) / CELL_WIDTH;
+				aabb[1][1] = (aabb[1][1] + state->domain_half - state->cell_half) / state->cell_width;
+				aabb[1][2] = (aabb[1][2] + state->domain_half - state->cell_half) / state->cell_width;
+
+				//round aabb
+				aabb[0][0] = floor(aabb[0][0]);
+				aabb[0][1] = floor(aabb[0][1]);
+				aabb[0][2] = floor(aabb[0][2]);
+				aabb[1][0] = ceil(aabb[1][0]);
+				aabb[1][1] = ceil(aabb[1][1]);
+				aabb[1][2] = ceil(aabb[1][2]);
+
+				int iaabb[2][POINTS_PER_VERTEX];
+				iaabb[0][0] = int(aabb[0][0]);
+				iaabb[0][1] = int(aabb[0][1]);
+				iaabb[0][2] = int(aabb[0][2]);
+				iaabb[1][0] = int(aabb[1][0]);
+				iaabb[1][1] = int(aabb[1][1]);
+				iaabb[1][2] = int(aabb[1][2]);
+
+				//build edge vectors
+				float edge[3][POINTS_PER_VERTEX];
+				edge[0][0] = triangle[1][0] - triangle[0][0];
+				edge[0][1] = triangle[1][1] - triangle[0][1];
+				edge[0][2] = triangle[1][2] - triangle[0][2];
+				edge[1][0] = triangle[2][0] - triangle[1][0];
+				edge[1][1] = triangle[2][1] - triangle[1][1];
+				edge[1][2] = triangle[2][2] - triangle[1][2];
+				edge[2][0] = triangle[0][0] - triangle[2][0];
+				edge[2][1] = triangle[0][1] - triangle[2][0];
+				edge[2][2] = triangle[0][2] - triangle[2][0];
+
+				//build edge normal vectors by cross product with triangle normal
+				float edgeNormal[3][POINTS_PER_VERTEX];
+				edgeNormal[0][0] = normal[1] * edge[0][2] - normal[2] * edge[0][1];
+				edgeNormal[0][1] = normal[2] * edge[0][0] - normal[0] * edge[0][2];
+				edgeNormal[0][2] = normal[0] * edge[0][1] - normal[1] * edge[0][0];
+				edgeNormal[1][0] = normal[1] * edge[1][2] - normal[2] * edge[1][1];
+				edgeNormal[1][1] = normal[2] * edge[1][0] - normal[0] * edge[1][2];
+				edgeNormal[1][2] = normal[0] * edge[1][1] - normal[1] * edge[1][0];
+				edgeNormal[2][0] = normal[1] * edge[2][2] - normal[2] * edge[2][1];
+				edgeNormal[2][1] = normal[2] * edge[2][0] - normal[0] * edge[2][2];
+				edgeNormal[2][2] = normal[0] * edge[2][1] - normal[1] * edge[2][0];
+
+				for (int xx = iaabb[0][0]; xx <= iaabb[1][0]; xx++)
+				{
+					for (int yy = iaabb[0][1]; yy <= iaabb[1][1]; yy++)
 					{
-						//Denormalise from grid to centre of cell
-						float xpos = xx * state->cell_width - state->domain_half + state->cell_half;
-						// float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
-						float ypos = yy * state->cell_width - state->domain_half + state->cell_half;
-						float zpos = zz * state->cell_width - state->domain_half + state->cell_half;
-
-						//dot product between gridpoint and triangle normal
-						float dvalue = (xpos - triangle[0][0]) * normal[0] + (ypos - triangle[0][1]) * normal[1] + (zpos - triangle[0][2]) * normal[2];
-
-						//Test whether the point lies within the triangle voronoi region
-						float planeTest[3];
-						planeTest[0] = xpos * edgeNormal[0][0] + ypos * edgeNormal[0][1] + zpos * edgeNormal[0][2] - triangle[0][0] * edgeNormal[0][0] - triangle[0][1] * edgeNormal[0][1] - triangle[0][2] * edgeNormal[0][2];
-						planeTest[1] = xpos * edgeNormal[1][0] + ypos * edgeNormal[1][1] + zpos * edgeNormal[1][2] - triangle[1][0] * edgeNormal[1][0] - triangle[1][1] * edgeNormal[1][1] - triangle[1][2] * edgeNormal[1][2];
-						planeTest[2] = xpos * edgeNormal[2][0] + ypos * edgeNormal[2][1] + zpos * edgeNormal[2][2] - triangle[2][0] * edgeNormal[2][0] - triangle[2][1] * edgeNormal[2][1] - triangle[2][2] * edgeNormal[2][2];
-
-						if (!(planeTest[0] < 0.0f && planeTest[1] < 0.0f && planeTest[2] < 0.0f))
+						for (int zz = iaabb[0][2]; zz <= iaabb[1][2]; zz++)
 						{
-							//Cross products
-							float regionNormal[3][POINTS_PER_VERTEX];
-							regionNormal[0][0] = normal[1] * edgeNormal[0][2] - normal[2] * edgeNormal[0][1];
-							regionNormal[0][1] = normal[2] * edgeNormal[0][0] - normal[0] * edgeNormal[0][2];
-							regionNormal[0][2] = normal[0] * edgeNormal[0][1] - normal[1] * edgeNormal[0][0];
-							regionNormal[1][0] = normal[1] * edgeNormal[1][2] - normal[2] * edgeNormal[1][1];
-							regionNormal[1][1] = normal[2] * edgeNormal[1][0] - normal[0] * edgeNormal[1][2];
-							regionNormal[1][2] = normal[0] * edgeNormal[1][1] - normal[1] * edgeNormal[1][0];
-							regionNormal[2][0] = normal[1] * edgeNormal[2][2] - normal[2] * edgeNormal[2][1];
-							regionNormal[2][1] = normal[2] * edgeNormal[2][0] - normal[0] * edgeNormal[2][2];
-							regionNormal[2][2] = normal[0] * edgeNormal[2][1] - normal[1] * edgeNormal[2][0];
+							//Denormalise from grid to centre of cell
+							float xpos = xx * state->cell_width - state->domain_half + state->cell_half;
+							// float ypos = yy * CELL_WIDTH - DOMAIN_HALF - (delta / 2) + CELL_HALF;
+							float ypos = yy * state->cell_width - state->domain_half + state->cell_half;
+							float zpos = zz * state->cell_width - state->domain_half + state->cell_half;
 
-							float regionTest[3][2];
-							//Test if the point lies between the planes that define the first edge's voronoi region.
-							regionTest[0][0] = -xpos * regionNormal[0][0] - ypos * regionNormal[0][1] - zpos * regionNormal[0][2] + triangle[0][0] * regionNormal[0][0] + triangle[0][1] * regionNormal[0][1] + triangle[0][2] * regionNormal[0][2];
-							regionTest[0][1] = xpos * regionNormal[0][0] + ypos * regionNormal[0][1] + zpos * regionNormal[0][2] - triangle[1][0] * regionNormal[0][0] - triangle[1][1] * regionNormal[0][1] - triangle[1][2] * regionNormal[0][2];
-							//Test if the point lies between the planes that define the second edge's voronoi region.
-							regionTest[1][0] = -xpos * regionNormal[1][0] - ypos * regionNormal[1][1] - zpos * regionNormal[1][2] + triangle[1][0] * regionNormal[1][0] + triangle[1][1] * regionNormal[1][1] + triangle[1][2] * regionNormal[1][2];
-							regionTest[1][1] = xpos * regionNormal[1][0] + ypos * regionNormal[1][1] + zpos * regionNormal[1][2] - triangle[2][0] * regionNormal[1][0] - triangle[2][1] * regionNormal[1][1] - triangle[2][2] * regionNormal[1][2];
-							//Test if the point lies between the planes that define the third edge's voronoi region.
-							regionTest[2][0] = -xpos * regionNormal[2][0] - ypos * regionNormal[2][1] - zpos * regionNormal[2][2] + triangle[2][0] * regionNormal[1][0] + triangle[2][1] * regionNormal[1][1] + triangle[2][2] * regionNormal[1][2];
-							regionTest[2][1] = xpos * regionNormal[2][0] + ypos * regionNormal[2][1] + zpos * regionNormal[2][2] - triangle[0][0] * regionNormal[1][0] - triangle[0][1] * regionNormal[1][1] - triangle[0][2] * regionNormal[1][2];
+							//dot product between gridpoint and triangle normal
+							float dvalue = (xpos - triangle[0][0]) * normal[0] + (ypos - triangle[0][1]) * normal[1] + (zpos - triangle[0][2]) * normal[2];
 
-							if (planeTest[0] >= 0.0f && regionTest[0][0] < 0.0f && regionTest[0][1] < 0.0f)
+							//Test whether the point lies within the triangle voronoi region
+							float planeTest[3];
+							planeTest[0] = xpos * edgeNormal[0][0] + ypos * edgeNormal[0][1] + zpos * edgeNormal[0][2] - triangle[0][0] * edgeNormal[0][0] - triangle[0][1] * edgeNormal[0][1] - triangle[0][2] * edgeNormal[0][2];
+							planeTest[1] = xpos * edgeNormal[1][0] + ypos * edgeNormal[1][1] + zpos * edgeNormal[1][2] - triangle[1][0] * edgeNormal[1][0] - triangle[1][1] * edgeNormal[1][1] - triangle[1][2] * edgeNormal[1][2];
+							planeTest[2] = xpos * edgeNormal[2][0] + ypos * edgeNormal[2][1] + zpos * edgeNormal[2][2] - triangle[2][0] * edgeNormal[2][0] - triangle[2][1] * edgeNormal[2][1] - triangle[2][2] * edgeNormal[2][2];
+
+							if (!(planeTest[0] < 0.0f && planeTest[1] < 0.0f && planeTest[2] < 0.0f))
 							{
-								float aa[POINTS_PER_VERTEX];
-								float bb[POINTS_PER_VERTEX];
-								float cc[POINTS_PER_VERTEX];
-								float dd[POINTS_PER_VERTEX];
+								//Cross products
+								float regionNormal[3][POINTS_PER_VERTEX];
+								regionNormal[0][0] = normal[1] * edgeNormal[0][2] - normal[2] * edgeNormal[0][1];
+								regionNormal[0][1] = normal[2] * edgeNormal[0][0] - normal[0] * edgeNormal[0][2];
+								regionNormal[0][2] = normal[0] * edgeNormal[0][1] - normal[1] * edgeNormal[0][0];
+								regionNormal[1][0] = normal[1] * edgeNormal[1][2] - normal[2] * edgeNormal[1][1];
+								regionNormal[1][1] = normal[2] * edgeNormal[1][0] - normal[0] * edgeNormal[1][2];
+								regionNormal[1][2] = normal[0] * edgeNormal[1][1] - normal[1] * edgeNormal[1][0];
+								regionNormal[2][0] = normal[1] * edgeNormal[2][2] - normal[2] * edgeNormal[2][1];
+								regionNormal[2][1] = normal[2] * edgeNormal[2][0] - normal[0] * edgeNormal[2][2];
+								regionNormal[2][2] = normal[0] * edgeNormal[2][1] - normal[1] * edgeNormal[2][0];
 
-								aa[0] = xpos - triangle[0][0];
-								aa[1] = ypos - triangle[0][1];
-								aa[2] = zpos - triangle[0][2];
-								bb[0] = xpos - triangle[1][0];
-								bb[1] = ypos - triangle[1][1];
-								bb[2] = zpos - triangle[1][2];
-								cc[0] = triangle[1][0] - triangle[0][0];
-								cc[1] = triangle[1][1] - triangle[0][1];
-								cc[2] = triangle[1][2] - triangle[0][2];
+								float regionTest[3][2];
+								//Test if the point lies between the planes that define the first edge's voronoi region.
+								regionTest[0][0] = -xpos * regionNormal[0][0] - ypos * regionNormal[0][1] - zpos * regionNormal[0][2] + triangle[0][0] * regionNormal[0][0] + triangle[0][1] * regionNormal[0][1] + triangle[0][2] * regionNormal[0][2];
+								regionTest[0][1] = xpos * regionNormal[0][0] + ypos * regionNormal[0][1] + zpos * regionNormal[0][2] - triangle[1][0] * regionNormal[0][0] - triangle[1][1] * regionNormal[0][1] - triangle[1][2] * regionNormal[0][2];
+								//Test if the point lies between the planes that define the second edge's voronoi region.
+								regionTest[1][0] = -xpos * regionNormal[1][0] - ypos * regionNormal[1][1] - zpos * regionNormal[1][2] + triangle[1][0] * regionNormal[1][0] + triangle[1][1] * regionNormal[1][1] + triangle[1][2] * regionNormal[1][2];
+								regionTest[1][1] = xpos * regionNormal[1][0] + ypos * regionNormal[1][1] + zpos * regionNormal[1][2] - triangle[2][0] * regionNormal[1][0] - triangle[2][1] * regionNormal[1][1] - triangle[2][2] * regionNormal[1][2];
+								//Test if the point lies between the planes that define the third edge's voronoi region.
+								regionTest[2][0] = -xpos * regionNormal[2][0] - ypos * regionNormal[2][1] - zpos * regionNormal[2][2] + triangle[2][0] * regionNormal[1][0] + triangle[2][1] * regionNormal[1][1] + triangle[2][2] * regionNormal[1][2];
+								regionTest[2][1] = xpos * regionNormal[2][0] + ypos * regionNormal[2][1] + zpos * regionNormal[2][2] - triangle[0][0] * regionNormal[1][0] - triangle[0][1] * regionNormal[1][1] - triangle[0][2] * regionNormal[1][2];
 
-								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
-								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
-								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+								if (planeTest[0] >= 0.0f && regionTest[0][0] < 0.0f && regionTest[0][1] < 0.0f)
+								{
+									float aa[POINTS_PER_VERTEX];
+									float bb[POINTS_PER_VERTEX];
+									float cc[POINTS_PER_VERTEX];
+									float dd[POINTS_PER_VERTEX];
 
-								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+									aa[0] = xpos - triangle[0][0];
+									aa[1] = ypos - triangle[0][1];
+									aa[2] = zpos - triangle[0][2];
+									bb[0] = xpos - triangle[1][0];
+									bb[1] = ypos - triangle[1][1];
+									bb[2] = zpos - triangle[1][2];
+									cc[0] = triangle[1][0] - triangle[0][0];
+									cc[1] = triangle[1][1] - triangle[0][1];
+									cc[2] = triangle[1][2] - triangle[0][2];
 
-								dvalue = (dvalue >= 0.0f) ? dist : -dist;
+									dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+									dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+									dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
 
+									float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+									dvalue = (dvalue >= 0.0f) ? dist : -dist;
+
+								}
+								else if (planeTest[1] >= 0.0f && regionTest[1][0] < 0.0f && regionTest[1][1] < 0.0f)
+								{
+									float aa[POINTS_PER_VERTEX];
+									float bb[POINTS_PER_VERTEX];
+									float cc[POINTS_PER_VERTEX];
+									float dd[POINTS_PER_VERTEX];
+
+									aa[0] = xpos - triangle[1][0];
+									aa[1] = ypos - triangle[1][1];
+									aa[2] = zpos - triangle[1][2];
+									bb[0] = xpos - triangle[2][0];
+									bb[1] = ypos - triangle[2][1];
+									bb[2] = zpos - triangle[2][2];
+									cc[0] = triangle[2][0] - triangle[1][0];
+									cc[1] = triangle[2][1] - triangle[1][1];
+									cc[2] = triangle[2][2] - triangle[1][2];
+
+									dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+									dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+									dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+
+									float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+									dvalue = (dvalue >= 0.0f) ? dist : -dist;
+								}
+								else if (planeTest[2] >= 0.0f && regionTest[2][0] < 0.0f && regionTest[2][1] < 0.0f)
+								{
+									float aa[POINTS_PER_VERTEX];
+									float bb[POINTS_PER_VERTEX];
+									float cc[POINTS_PER_VERTEX];
+									float dd[POINTS_PER_VERTEX];
+
+									aa[0] = xpos - triangle[2][0];
+									aa[1] = ypos - triangle[2][1];
+									aa[2] = zpos - triangle[2][2];
+									bb[0] = xpos - triangle[0][0];
+									bb[1] = ypos - triangle[0][1];
+									bb[2] = zpos - triangle[0][2];
+									cc[0] = triangle[0][0] - triangle[2][0];
+									cc[1] = triangle[0][1] - triangle[2][1];
+									cc[2] = triangle[0][2] - triangle[2][2];
+
+									dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
+									dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
+									dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
+
+									float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
+
+									dvalue = (dvalue >= 0.0f) ? dist : -dist;
+								}
+								else
+								{
+									float dist[3];
+									dist[0] = sqrtf((xpos - triangle[0][0])*(xpos - triangle[0][0]) + (ypos - triangle[0][1])*(ypos - triangle[0][1]) + (zpos - triangle[0][2])*(zpos - triangle[0][2]));
+									dist[1] = sqrtf((xpos - triangle[1][0])*(xpos - triangle[1][0]) + (ypos - triangle[1][1])*(ypos - triangle[1][1]) + (zpos - triangle[1][2])*(zpos - triangle[1][2]));
+									dist[2] = sqrtf((xpos - triangle[2][0])*(xpos - triangle[2][0]) + (ypos - triangle[2][1])*(ypos - triangle[2][1]) + (zpos - triangle[2][2])*(zpos - triangle[2][2]));
+
+									dvalue = (dvalue >= 0.0f) ? std::min(dist[0], std::min(dist[1], dist[2])) : -std::min(dist[0], std::min(dist[1], dist[2]));
+								}
 							}
-							else if (planeTest[1] >= 0.0f && regionTest[1][0] < 0.0f && regionTest[1][1] < 0.0f)
+
+							if (result[xx][yy][zz] < FLT_MAX)
 							{
-								float aa[POINTS_PER_VERTEX];
-								float bb[POINTS_PER_VERTEX];
-								float cc[POINTS_PER_VERTEX];
-								float dd[POINTS_PER_VERTEX];
-
-								aa[0] = xpos - triangle[1][0];
-								aa[1] = ypos - triangle[1][1];
-								aa[2] = zpos - triangle[1][2];
-								bb[0] = xpos - triangle[2][0];
-								bb[1] = ypos - triangle[2][1];
-								bb[2] = zpos - triangle[2][2];
-								cc[0] = triangle[2][0] - triangle[1][0];
-								cc[1] = triangle[2][1] - triangle[1][1];
-								cc[2] = triangle[2][2] - triangle[1][2];
-
-								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
-								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
-								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
-
-								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
-
-								dvalue = (dvalue >= 0.0f) ? dist : -dist;
-							}
-							else if (planeTest[2] >= 0.0f && regionTest[2][0] < 0.0f && regionTest[2][1] < 0.0f)
-							{
-								float aa[POINTS_PER_VERTEX];
-								float bb[POINTS_PER_VERTEX];
-								float cc[POINTS_PER_VERTEX];
-								float dd[POINTS_PER_VERTEX];
-
-								aa[0] = xpos - triangle[2][0];
-								aa[1] = ypos - triangle[2][1];
-								aa[2] = zpos - triangle[2][2];
-								bb[0] = xpos - triangle[0][0];
-								bb[1] = ypos - triangle[0][1];
-								bb[2] = zpos - triangle[0][2];
-								cc[0] = triangle[0][0] - triangle[2][0];
-								cc[1] = triangle[0][1] - triangle[2][1];
-								cc[2] = triangle[0][2] - triangle[2][2];
-
-								dd[0] = aa[1] * bb[2] - aa[2] * bb[1];
-								dd[1] = aa[2] * bb[0] - aa[0] * bb[2];
-								dd[2] = aa[0] * bb[1] - aa[1] * bb[0];
-
-								float dist = sqrtf(dd[0] * dd[0] + dd[1] * dd[1] + dd[2] * dd[2]) / sqrtf(cc[0] * cc[0] + cc[1] * cc[1] + cc[2] * cc[2]);
-
-								dvalue = (dvalue >= 0.0f) ? dist : -dist;
+								if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue > 0.0f && result[xx][yy][zz] < 0.0f)
+								{
+									result[xx][yy][zz] = dvalue;
+								}
+								else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue >= 0.0f && result[xx][yy][zz] > 0.0f)
+								{
+									result[xx][yy][zz] = dvalue;
+								}
+								else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue <= 0.0f && result[xx][yy][zz] < 0.0f)
+								{
+									result[xx][yy][zz] = dvalue;
+								}
 							}
 							else
 							{
-								float dist[3];
-								dist[0] = sqrtf((xpos - triangle[0][0])*(xpos - triangle[0][0]) + (ypos - triangle[0][1])*(ypos - triangle[0][1]) + (zpos - triangle[0][2])*(zpos - triangle[0][2]));
-								dist[1] = sqrtf((xpos - triangle[1][0])*(xpos - triangle[1][0]) + (ypos - triangle[1][1])*(ypos - triangle[1][1]) + (zpos - triangle[1][2])*(zpos - triangle[1][2]));
-								dist[2] = sqrtf((xpos - triangle[2][0])*(xpos - triangle[2][0]) + (ypos - triangle[2][1])*(ypos - triangle[2][1]) + (zpos - triangle[2][2])*(zpos - triangle[2][2]));
-
-								dvalue = (dvalue >= 0.0f) ? std::min(dist[0], std::min(dist[1], dist[2])) : -std::min(dist[0], std::min(dist[1], dist[2]));
-							}
-						}
-
-						if (result[xx][yy][zz] < FLT_MAX)
-						{
-							if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue > 0.0f && result[xx][yy][zz] < 0.0f)
-							{
 								result[xx][yy][zz] = dvalue;
 							}
-							else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue >= 0.0f && result[xx][yy][zz] > 0.0f)
-							{
-								result[xx][yy][zz] = dvalue;
-							}
-							else if (std::abs(dvalue) < std::abs(result[xx][yy][zz]) && dvalue <= 0.0f && result[xx][yy][zz] < 0.0f)
-							{
-								result[xx][yy][zz] = dvalue;
-							}
-						}
-						else
-						{
-							result[xx][yy][zz] = dvalue;
 						}
 					}
 				}
@@ -340,7 +344,8 @@ namespace pilar
 						// ?
 						grid[indexgrid] = result[i][j][k];
 						//if (result[i][j][k] < FLT_MAX)
-						//	UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
+						//UE_LOG(LogTemp, Error, TEXT("ERR::Result %d(%d, %d, %d) %f\n"), indexgrid,i, j, k, grid[indexgrid]);
+						
 					}
 				}
 	}
@@ -400,7 +405,7 @@ namespace pilar
 		h_state->numModel = numModel;
 		h_state->grid = grid;
 
-		initDistanceField(model, grid, h_state);
+		initDistanceField(model, numModel, grid, h_state);
 
 		head = new Sphere;
 		head->pos = Vector3f(0.0f, 50.f, 60.f);
@@ -527,7 +532,11 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 
 	m_objects.clear();
 	mesh_head = nullptr;
+
+	HandModel = nullptr;
 	m_model = nullptr;
+	m_hand = nullptr;
+	Models = nullptr;
 
 	root_hair.clear();
 	hairs = nullptr;
@@ -541,11 +550,14 @@ UMyHairSim::UMyHairSim(const FObjectInitializer& ObjectInitializer)
 		DefaultMaterial = FoundMaterial.Object;
 	}
 	//static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundSpline(TEXT("StaticMesh'/Game/Geometry/Meshes/HairPiece1.HairPiece1'"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundSpline(TEXT("StaticMesh'/Game/Geometry/Meshes/Braid_Plane_001.Braid_Plane_001'"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> FoundSpline(TEXT("StaticMesh'/Game/Geometry/Meshes/HairPiece4.HairPiece4'"));
 	if (FoundSpline.Succeeded())
 	{
 		SplineMesh = FoundSpline.Object;
 	}
+		
+	// Get Target actors movement component 	
+	//target_movement = Cast<UMovement>(target->GetComponentByClass(UMovement::StaticClass()));
 }
 
 void UMyHairSim::load_meshes()
@@ -781,6 +793,139 @@ bool UMyHairSim::init_HairRoot(const MeshCustom* m, int num_spawns, float thresh
 	return true;
 }
 
+void UMyHairSim::LoadHandModel(ModelOBJ* obj)
+{
+	UStaticMesh* usm = Hand->GetStaticMesh();
+	if (Hand == nullptr) { UE_LOG(LogTemp, Error, TEXT("ERR::HeadMesh::No Static Hand Mesh Set")); }
+
+	// Store Static Mesh LOD0 Buffer Pointers
+	FStaticMeshLODResources* lod0 = *(usm->RenderData->LODResources.GetData());
+	smHandData.vb = &(lod0->VertexBuffers.PositionVertexBuffer); // Pos
+	smHandData.smvb = &(lod0->VertexBuffers.StaticMeshVertexBuffer); // Static Mesh Buffer
+	smHandData.cvb = &(lod0->VertexBuffers.ColorVertexBuffer); // Colour
+	smHandData.ib = &(lod0->IndexBuffer); // Tri Inds
+
+	smHandData.vert_count = smHandData.vb->GetNumVertices();
+	smHandData.ind_count = smHandData.ib->GetNumIndices();
+	smHandData.tri_count = smHandData.ind_count / 3;
+#ifdef DEBUG_PRINT_LOG
+	UE_LOG(LogTemp, Warning, TEXT("DBG::Static Mesh Vertex Count == %d | Index Count = %d"), smData.vert_count, smData.ind_count);
+#endif
+	// Initalize smHandData Arrays. 
+	smHandData.Pos.AddDefaulted(smHandData.vert_count);
+	smHandData.Col.AddDefaulted(smHandData.vert_count);
+	smHandData.Normal.AddDefaulted(smHandData.vert_count);
+	smHandData.Tang.AddDefaulted(smHandData.vert_count);
+	smHandData.UV.AddDefaulted(smHandData.vert_count);
+	smHandData.Ind.AddDefaulted(smHandData.ind_count);
+	smHandData.Tris.AddDefaulted(smHandData.tri_count);
+	
+	smHandData.has_uv = smHandData.smvb->GetNumTexCoords() != 0;
+	smHandData.has_col = lod0->bHasColorVertexData;
+
+	// Static mesh Data Buffer --> Array Deserialization.
+	for (int32 i = 0; i < smHandData.vert_count; ++i)
+	{
+		// SMesh-ProcMesh Init
+		smHandData.Pos[i] = smHandData.vb->VertexPosition(i) + HandModel->GetActorLocation();// Pass Verts Without Component Location Offset initally.
+		smHandData.Normal[i] = smHandData.smvb->VertexTangentZ(i);
+		smHandData.Tang[i] = FProcMeshTangent(FVector(smHandData.smvb->VertexTangentX(i).X, smHandData.smvb->VertexTangentX(i).Y, smHandData.smvb->VertexTangentX(i).Z), false);
+		smHandData.has_col == true ? smHandData.Col[i] = smHandData.cvb->VertexColor(i) : smHandData.Col[i] = FColor(255, 255, 255);
+		smHandData.has_uv == true ? smHandData.UV[i] = smHandData.smvb->GetVertexUV(i, 0) : smHandData.UV[i] = FVector2D(0.0f); // Only support 1 UV Channel fnow.
+	}
+	// Indices 
+	for (int32 i = 0; i < smHandData.ind_count; ++i)
+	{
+		smHandData.Ind[i] = static_cast<int32>(smHandData.ib->GetIndex(i));
+	}
+
+	obj->totalConnectedPoints = 0;
+	obj->totalConnectedTriangles = 0;
+	obj->vertices = new float[smHandData.vert_count * 3];
+	obj->normals = new float[smHandData.ind_count * 3];
+	obj->faces = new float[smHandData.ind_count * 3];
+
+	UWorld* world = GetWorld();
+
+	int triangleIndex = 0;
+	int normalIndex = 0;
+
+	for (int32 i = 0; i < smHandData.vert_count; ++i)
+	{
+		// ? ÁÂÇ¥°è ¹®Á¦ÀÎ°¡ ½Í¾î y, z ¹Ù²ãº½
+		obj->vertices[obj->totalConnectedPoints] = smHandData.vb->VertexPosition(i).X + HandModel->GetActorLocation().X;
+		obj->vertices[obj->totalConnectedPoints + 1] = smHandData.vb->VertexPosition(i).Z + HandModel->GetActorLocation().Z;
+		obj->vertices[obj->totalConnectedPoints + 2] = smHandData.vb->VertexPosition(i).Y + HandModel->GetActorLocation().Y;
+		obj->totalConnectedPoints += POINTS_PER_VERTEX;
+	}
+
+	for (int i = 0; i < smHandData.tri_count; ++i)
+	{
+		int vertexNumber[4] = { 0, 0, 0 };
+		vertexNumber[0] = smHandData.Ind[3 * i];
+		vertexNumber[1] = smHandData.Ind[3 * i + 1];
+		vertexNumber[2] = smHandData.Ind[3 * i + 2];
+
+		int tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->faces[triangleIndex + tCounter] = obj->vertices[3 * vertexNumber[j]];
+			obj->faces[triangleIndex + tCounter + 1] = obj->vertices[3 * vertexNumber[j] + 1];
+			obj->faces[triangleIndex + tCounter + 2] = obj->vertices[3 * vertexNumber[j] + 2];
+			tCounter += POINTS_PER_VERTEX;
+		}
+
+		float coord1[3] = { obj->faces[triangleIndex], obj->faces[triangleIndex + 1], obj->faces[triangleIndex + 2] };
+		float coord2[3] = { obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 4], obj->faces[triangleIndex + 5] };
+		float coord3[3] = { obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 7], obj->faces[triangleIndex + 8] };
+
+		FVector vec1(obj->faces[triangleIndex], obj->faces[triangleIndex + 2], obj->faces[triangleIndex + 1]);
+		FVector vec2(obj->faces[triangleIndex + 3], obj->faces[triangleIndex + 5], obj->faces[triangleIndex + 4]);
+		FVector vec3(obj->faces[triangleIndex + 6], obj->faces[triangleIndex + 8], obj->faces[triangleIndex + 7]);
+		//DrawDebugLine(world, vec1, vec2, FColor::Blue, false, 0.5f, 0, 0.1);
+		//DrawDebugLine(world, vec2, vec3, FColor::Blue, false, 0.5f, 0, 0.1);
+		//DrawDebugLine(world, vec3, vec1, FColor::Blue, false, 0.5f, 0, 0.1);
+
+		/* calculate Vector1 and Vector2 */
+		float va[3], vb[3], vr[3], val;
+
+		va[0] = coord1[0] - coord2[0];
+		va[1] = coord1[1] - coord2[1];
+		va[2] = coord1[2] - coord2[2];
+
+		vb[0] = coord1[0] - coord3[0];
+		vb[1] = coord1[1] - coord3[1];
+		vb[2] = coord1[2] - coord3[2];
+
+
+		/* cross product */
+		vr[0] = va[1] * vb[2] - vb[1] * va[2];
+		vr[1] = vb[0] * va[2] - va[0] * vb[2];
+		vr[2] = va[0] * vb[1] - vb[0] * va[1];
+
+		/* normalization factor */
+		val = sqrtf(vr[0] * vr[0] + vr[1] * vr[1] + vr[2] * vr[2]);
+
+		float norm[3];
+		norm[0] = vr[0] / val;
+		norm[1] = vr[1] / val;
+		norm[2] = vr[2] / val;
+
+		tCounter = 0;
+		for (int j = 0; j < POINTS_PER_VERTEX; j++)
+		{
+			obj->normals[normalIndex + tCounter] = norm[0];
+			obj->normals[normalIndex + tCounter + 1] = norm[1];
+			obj->normals[normalIndex + tCounter + 2] = norm[2];
+			tCounter += POINTS_PER_VERTEX;
+		}
+
+		triangleIndex += TOTAL_FLOATS_IN_TRIANGLE;
+		normalIndex += TOTAL_FLOATS_IN_TRIANGLE;
+		obj->totalConnectedTriangles += TOTAL_FLOATS_IN_TRIANGLE;
+	}
+}
+
 void UMyHairSim::loadModel(ModelOBJ* obj)
 {
 	UStaticMesh* usm = m_StaticMesh->GetStaticMesh();
@@ -1005,6 +1150,18 @@ void UMyHairSim::InitHairModel()
 		mesh_head = m_objects[i];
 	}
 
+	// Get Target Actor 	
+	for (TActorIterator<AActor> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+	{
+		FName name = ActorItr->GetClass()->GetFName();
+		if (ActorItr->GetClass()->GetFName() == FName(TEXT("Hand_Model_C")))
+		{
+			HandModel = *ActorItr;
+			Hand = HandModel->FindComponentByClass<UStaticMeshComponent>();
+			break;
+		}
+	}
+
 	//	coll_sphere.radius = 1.0;
 	//	coll_sphere.center = Vec3(0, 0.6, 0.53);
 	//int numStrands = NUMSTRANDS;
@@ -1034,12 +1191,18 @@ void UMyHairSim::InitHairModel()
 	pilar::Vector3f gravity(0.0f, GRAVITY, 0.0f);
 
 	//Load geometry from file
+	Models = new ModelOBJ[2];
 	m_model = new ModelOBJ;
-	loadModel(m_model);
-	float* grid = new float[DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM];
+	m_hand = new ModelOBJ;
 
+	loadModel(m_model);
+	LoadHandModel(m_hand);
+	Models[0] = *m_model;
+	Models[1] = *m_hand;
+
+	float* grid = new float[DOMAIN_DIM*DOMAIN_DIM*DOMAIN_DIM];
 	// Initialise get_state 
-	hairs = new pilar::CUHair(numStrands, NUMPARTICLES, NUMCOMPONENTS, 1, MASS,
+	hairs = new pilar::CUHair(numStrands, NUMPARTICLES, NUMCOMPONENTS, 2, numStrands * 0.01f,
 		K_EDGE, K_BEND, K_TWIST, K_EXTRA,
 		D_EDGE, D_BEND, D_TWIST, D_EXTRA,
 		LENGTH_EDGE, LENGTH_BEND, LENGTH_TWIST,
@@ -1047,7 +1210,7 @@ void UMyHairSim::InitHairModel()
 		gravity,
 		roots,
 		normals,
-		m_model,
+		Models,
 		grid);
 
 	//Initialise positions along normals on the gpu
@@ -1063,13 +1226,32 @@ void UMyHairSim::DoOnceSimulation()
 	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Blue, TEXT("Init Hair Model"));
 
 	pilar::Vector3f* pos = hairs->get_state->position;
+	float* grid = hairs->get_state->grid;
+	UWorld* world = GetWorld();
+
+	DrawDebugBox(world, 
+		FVector(0, 0, 0), 
+		FVector(CELL_WIDTH * DOMAIN_DIM, CELL_WIDTH * DOMAIN_DIM, CELL_WIDTH * DOMAIN_DIM), 
+		FColor::Purple, true, -1, 0, 5);
+
+	//for (int i = 0; i < DOMAIN_DIM; i++)
+	//	for (int j = 0; j < DOMAIN_DIM; j++)
+	//		for (int k = 0; k < DOMAIN_DIM; k++)
+	//		{
+	//			int indexgrid = (DOMAIN_DIM*DOMAIN_DIM*i) + (DOMAIN_DIM * j) + k;
+	//			DrawDebugPoint(world, 
+	//				FVector(DOMAIN_HALF - 13.8f*i, DOMAIN_HALF - 13.8f*j, DOMAIN_HALF - 13.8f*k),
+	//				5.f, 
+	//				FColor(2* grid[indexgrid], 2* grid[indexgrid], 2 * grid[indexgrid]),
+	//				true);
+	//		}
 
 	for (int32 h = 0; h < hairs->h_state->numStrands; ++h)
 	{
 		for (int32 par = 0; par < hairs->h_state->numParticles; ++par)
 		{
 			UE_LOG(LogType, Warning, TEXT("DoOnceSimulation - Update Hair %d"), h * hairs->h_state->numParticles + par);
-			UWorld* world = GetWorld();
+			
 
 			FVector vec1(
 				pos[h * hairs->h_state->numParticles + par].x,
@@ -1190,10 +1372,14 @@ void UMyHairSim::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompo
 		m_move = m_before - m_after;
 
 		//---If Move, Update Model Grid
-		if (m_move.length() > 0)
+		if (m_hand!=nullptr)
 		{
 			UpdateModel(m_model, m_move);
-			pilar::initDistanceField(m_model, hairs->get_state->grid, hairs->get_state);
+			LoadHandModel(m_hand);
+
+			Models[0] = *m_model;
+			Models[1] = *m_hand;
+			pilar::initDistanceField(Models, 2, hairs->get_state->grid, hairs->get_state);
 		}
 
 		//---Update Hair
